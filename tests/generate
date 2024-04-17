@@ -1,0 +1,47 @@
+#!/bin/sh
+set -eu
+
+# Copyright (C) 2024, Benjamin Drung <bdrung@posteo.de>
+# SPDX-License-Identifier: ISC
+
+# Generate the test cpio files
+
+export SOURCE_DATE_EPOCH=1713104326
+
+# Generate the test data
+
+cd "$(dirname "$0")"
+
+input="$(mktemp -d "${TMPDIR-/tmp}/3cpio_XXXXXX")"
+trap 'rm -rf "${input}"' 0 1 2 3 6
+
+mkdir -p "$input/single/path"
+echo "content" > "$input/single/path/file"
+find "${input}/single" -depth -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" {} \;
+{ cd "$input/single"; find .; } | LC_ALL=C sort \
+    | cpio --reproducible --quiet -o -H newc -D "$input/single" > single.cpio
+
+mkdir -p "$input/shell/usr/bin/"
+echo "This is a fake busybox binary to simulate a POSIX shell" > "$input/shell/usr/bin/sh"
+find "${input}/shell" -depth -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" {} \;
+{ cd "$input/shell"; find .; } | LC_ALL=C sort \
+    | cpio --reproducible --quiet -o -H newc -D "$input/shell" > "$input/shell.cpio"
+touch --date="@${SOURCE_DATE_EPOCH}" "$input/shell.cpio"
+
+cp single.cpio bzip2.cpio
+bzip2 -9 < "$input/shell.cpio" >> bzip2.cpio
+
+cp single.cpio gzip.cpio
+gzip -n -9 < "$input/shell.cpio" >> gzip.cpio
+
+cp single.cpio lz4.cpio
+lz4 -l -9 < "$input/shell.cpio" >> lz4.cpio
+
+cp single.cpio lzop.cpio
+lzop -9 -c "$input/shell.cpio" >> lzop.cpio
+
+cp single.cpio xz.cpio
+xz --check=crc32 -9 < "$input/shell.cpio" >> xz.cpio
+
+cp single.cpio zstd.cpio
+zstd -q -9 < "$input/shell.cpio" >> zstd.cpio

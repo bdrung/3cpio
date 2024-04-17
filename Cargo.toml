@@ -1,0 +1,23 @@
+[package]
+name = "threecpio"
+version = "0.1.0"
+edition = "2021"
+authors = ["Benjamin Drung <bdrung@posteo.de>"]
+license = "ISC"
+homepage = "https://github.com/bdrung/3cpio"
+repository = "https://github.com/bdrung/3cpio"
+description = "manage initrd cpio archives"
+readme = "README.md"
+categories = ["command-line-utilities", "compression", "encoding", "filesystem"]
+keywords = ["archive", "cpio", "initrd"]
+
+[[bin]]
+name = "3cpio"
+path = "src/main.rs"
+
+[dependencies]
+gumdrop = "0.8"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
