@@ -79,3 +79,13 @@ Commands used:
 time 3cpio -t /boot/$file > /dev/null
 time lsinitramfs /boot/$file > /dev/null
 ```
+
+Naming and alternatives
+-----------------------
+
+The tool is named 3cpio because it is the third cpio tool besides
+[GNU cpio](https://www.gnu.org/software/cpio/) and `bsdcpio` provided by
+[libarchive](https://www.libarchive.org/). 3cpio is also the third tool that can
+list the content of initramfs cpio archives besides `lsinitramfs` from
+[initramfs-tools](https://tracker.debian.org/pkg/initramfs-tools) and `lsinitrd`
+from [dracut](https://github.com/dracut-ng/dracut-ng).
