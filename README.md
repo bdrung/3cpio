@@ -19,7 +19,7 @@ allowed to start with numbers.
 Usage examples
 --------------
 
-Examine the content of the initramfs cpio on an Ubunu 24.04 system:
+Examine the content of the initramfs cpio on an Ubuntu 24.04 system:
 
 ```
 $ 3cpio --examine /boot/initrd.img
@@ -32,7 +32,7 @@ $ 3cpio --examine /boot/initrd.img
 This initramfs cpio consists of three uncompressed cpio archives followed by a
 Zstandard-compressed cpio archive.
 
-List the content of the initramfs cpio on an Ubunu 24.04 system:
+List the content of the initramfs cpio on an Ubuntu 24.04 system:
 
 ```
 $ 3cpio --list /boot/initrd.img
