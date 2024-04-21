@@ -79,7 +79,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
 
 fn main() -> ExitCode {
     let executable = std::env::args().next().unwrap();
-    let opts = match parse_args() {
+    let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{}: Error: {}", executable, e);
@@ -87,21 +87,21 @@ fn main() -> ExitCode {
         }
     };
 
-    let file = match File::open(&opts.file) {
+    let file = match File::open(&args.file) {
         Ok(f) => f,
         Err(e) => {
             eprintln!(
                 "{}: Error: Failed to open '{}': {}",
-                executable, opts.file, e
+                executable, args.file, e
             );
             return ExitCode::FAILURE;
         }
     };
 
     let mut stdout = std::io::stdout();
-    let (operation, result) = if opts.examine {
+    let (operation, result) = if args.examine {
         ("examine", examine_cpio_content(file, &mut stdout))
-    } else if opts.list {
+    } else if args.list {
         ("list", list_cpio_content(file, &mut stdout))
     } else {
         panic!("no operation specified");
@@ -113,7 +113,7 @@ fn main() -> ExitCode {
             _ => {
                 eprintln!(
                     "{}: Error: Failed to {} content of '{}': {}",
-                    executable, operation, opts.file, e
+                    executable, operation, args.file, e
                 );
                 return ExitCode::FAILURE;
             }
