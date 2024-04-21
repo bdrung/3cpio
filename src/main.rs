@@ -1,7 +1,6 @@
 // Copyright (C) 2024, Benjamin Drung <bdrung@posteo.de>
 // SPDX-License-Identifier: ISC
 
-use core::panic;
 use std::fs::File;
 use std::io::ErrorKind;
 use std::process::ExitCode;
@@ -104,7 +103,7 @@ fn main() -> ExitCode {
     } else if args.list {
         ("list", list_cpio_content(file, &mut stdout))
     } else {
-        panic!("no operation specified");
+        unreachable!("no operation specified");
     };
 
     if let Err(e) = result {
