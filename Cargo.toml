@@ -16,7 +16,7 @@ name = "3cpio"
 path = "src/main.rs"
 
 [dependencies]
-gumdrop = "0.8"
+lexopt = "0.3"
 
 [dev-dependencies]
 assert_cmd = "2.0"

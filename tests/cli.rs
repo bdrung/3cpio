@@ -71,9 +71,7 @@ fn missing_file_argument() -> Result<(), Box<dyn Error>> {
     cmd.assert()
         .failure()
         .code(2)
-        .stderr(predicate::str::contains(
-            "missing required cpio file argument",
-        ));
+        .stderr(predicate::str::contains("missing argument FILE"));
     Ok(())
 }
 
