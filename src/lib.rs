@@ -1,19 +1,43 @@
 // Copyright (C) 2024, Benjamin Drung <bdrung@posteo.de>
 // SPDX-License-Identifier: ISC
 
-use std::fs::File;
+use std::collections::{BTreeMap, HashMap};
+use std::fs::{
+    create_dir, hard_link, remove_file, set_permissions, symlink_metadata, File, OpenOptions,
+    Permissions,
+};
 use std::io::prelude::*;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 use std::io::SeekFrom;
+use std::os::unix::fs::{chown, fchown, symlink, PermissionsExt};
 use std::process::ChildStdout;
 use std::process::Command;
 use std::process::Stdio;
+use std::time::SystemTime;
+
+use crate::libc::set_modified;
+
+mod libc;
 
 const CPIO_HEADER_LENGTH: u32 = 110;
 const CPIO_MAGIC_NUMBER: [u8; 6] = *b"070701";
 const PIPE_SIZE: usize = 65536;
+
+const MODE_PERMISSION_MASK: u32 = 0o007_777;
+const MODE_FILETYPE_MASK: u32 = 0o770_000;
+const FILETYPE_FIFO: u32 = 0o010_000;
+const FILETYPE_CHARACTER_DEVICE: u32 = 0o020_000;
+const FILETYPE_DIRECTORY: u32 = 0o040_000;
+const FILETYPE_BLOCK_DEVICE: u32 = 0o060_000;
+const FILETYPE_REGULAR_FILE: u32 = 0o100_000;
+const FILETYPE_SYMLINK: u32 = 0o120_000;
+const FILETYPE_SOCKET: u32 = 0o140_000;
+
+pub const LOG_LEVEL_WARNING: u32 = 5;
+pub const LOG_LEVEL_INFO: u32 = 7;
+pub const LOG_LEVEL_DEBUG: u32 = 8;
 
 pub trait SeekForward {
     /// Seek forward to an offset, in bytes, in a stream.
@@ -70,6 +94,73 @@ impl<'a, R: Read + SeekForward> Iterator for CpioFilenameReader<'a, R> {
     }
 }
 
+#[derive(Debug)]
+struct Header {
+    ino: u32,
+    mode: u32,
+    uid: u32,
+    gid: u32,
+    nlink: u32,
+    mtime: u32,
+    filesize: u32,
+    major: u32,
+    minor: u32,
+    // unused
+    //rmajor: u32,
+    //rminor: u32,
+    filename: String,
+}
+
+impl Header {
+    // Return major and minor combined as u64
+    fn dev(&self) -> u64 {
+        u64::from(self.major) << 32 | u64::from(self.minor)
+    }
+
+    fn mode_perm(&self) -> u32 {
+        self.mode & MODE_PERMISSION_MASK
+    }
+
+    fn permission(&self) -> Permissions {
+        PermissionsExt::from_mode(self.mode & MODE_PERMISSION_MASK)
+    }
+
+    fn ino_and_dev(&self) -> u128 {
+        u128::from(self.ino) << 64 | u128::from(self.dev())
+    }
+
+    fn mark_seen(&self, seen_files: &mut SeenFiles) {
+        seen_files.insert(self.ino_and_dev(), self.filename.clone());
+    }
+}
+
+// TODO: Document hardlink structure
+type SeenFiles = HashMap<u128, String>;
+
+struct Extractor {
+    seen_files: SeenFiles,
+    mtimes: BTreeMap<String, i64>,
+}
+
+impl Extractor {
+    fn new() -> Extractor {
+        Extractor {
+            seen_files: SeenFiles::new(),
+            mtimes: BTreeMap::new(),
+        }
+    }
+
+    fn set_modified_times(&self, log_level: u32) -> Result<()> {
+        for (path, mtime) in self.mtimes.iter().rev() {
+            if log_level >= LOG_LEVEL_DEBUG {
+                writeln!(std::io::stderr(), "set mtime {} for '{}'", mtime, path)?;
+            };
+            set_modified(path, *mtime)?;
+        }
+        Ok(())
+    }
+}
+
 fn align_to_4_bytes(length: u32) -> u32 {
     let unaligned = length % 4;
     if unaligned == 0 {
@@ -103,6 +194,48 @@ fn read_filename<R: Read>(file: &mut R, namesize: u32) -> Result<String> {
     // TODO: propper name reading handling
     let filename = std::str::from_utf8(&filename_bytes).unwrap();
     Ok(filename.to_string())
+}
+
+fn read_cpio_header<R: Read>(file: &mut R) -> std::io::Result<Header> {
+    let mut buffer = [0; CPIO_HEADER_LENGTH as usize];
+    file.read_exact(&mut buffer)?;
+    if buffer[0..6] != CPIO_MAGIC_NUMBER {
+        // TODO: Test this case
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!(
+                "Invalid CPIO magic number '{}{}{}{}{}{}'. Expected {}{}{}{}{}{}",
+                buffer[0],
+                buffer[1],
+                buffer[2],
+                buffer[3],
+                buffer[4],
+                buffer[5],
+                CPIO_MAGIC_NUMBER[0],
+                CPIO_MAGIC_NUMBER[1],
+                CPIO_MAGIC_NUMBER[2],
+                CPIO_MAGIC_NUMBER[3],
+                CPIO_MAGIC_NUMBER[4],
+                CPIO_MAGIC_NUMBER[5]
+            ),
+        ));
+    }
+    let namesize = hex_str_to_u32(&buffer[94..102])?;
+    let filename = read_filename(file, namesize)?;
+    Ok(Header {
+        ino: hex_str_to_u32(&buffer[6..14])?,
+        mode: hex_str_to_u32(&buffer[14..22])?,
+        uid: hex_str_to_u32(&buffer[22..30])?,
+        gid: hex_str_to_u32(&buffer[30..38])?,
+        nlink: hex_str_to_u32(&buffer[38..46])?,
+        mtime: hex_str_to_u32(&buffer[46..54])?,
+        filesize: hex_str_to_u32(&buffer[54..62])?,
+        major: hex_str_to_u32(&buffer[62..70])?,
+        minor: hex_str_to_u32(&buffer[70..78])?,
+        //rmajor: hex_str_to_u32(&buffer[78..86])?,
+        //rminor: hex_str_to_u32(&buffer[86..94])?,
+        filename,
+    })
 }
 
 /// Read only the file name from the next cpio object.
@@ -229,6 +362,251 @@ fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
     Ok(())
 }
 
+fn create_dir_ignore_existing<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
+    if let Err(e) = create_dir(&path) {
+        if e.kind() != ErrorKind::AlreadyExists {
+            return Err(e);
+        }
+        let stat = symlink_metadata(&path)?;
+        if !stat.is_dir() {
+            remove_file(&path)?;
+            create_dir(&path)?;
+        }
+    };
+    Ok(())
+}
+
+fn write_directory(
+    header: &Header,
+    preserve_permissions: bool,
+    log_level: u32,
+    mtimes: &mut BTreeMap<String, i64>,
+) -> Result<()> {
+    if header.filesize != 0 {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!(
+                "Invalid size for directory '{}': {} bytes instead of 0.",
+                header.filename, header.filesize
+            ),
+        ));
+    };
+    if log_level >= LOG_LEVEL_DEBUG {
+        writeln!(
+            std::io::stderr(),
+            "Creating directory '{}' with mode {:o}{}",
+            header.filename,
+            header.mode_perm(),
+            if preserve_permissions {
+                format!(" and owner {}:{}", header.uid, header.gid)
+            } else {
+                String::new()
+            },
+        )?;
+    };
+    create_dir_ignore_existing(&header.filename)?;
+    set_permissions(&header.filename, header.permission())?;
+    if preserve_permissions {
+        chown(&header.filename, Some(header.uid), Some(header.gid))?;
+    }
+    mtimes.insert(header.filename.to_string(), header.mtime.into());
+    Ok(())
+}
+
+fn from_mtime(mtime: u32) -> SystemTime {
+    std::time::UNIX_EPOCH + std::time::Duration::from_secs(mtime.into())
+}
+
+fn try_get_hard_link_target<'a>(header: &Header, seen_files: &'a SeenFiles) -> Option<&'a String> {
+    if header.nlink <= 1 {
+        return None;
+    }
+    seen_files.get(&header.ino_and_dev())
+}
+
+fn write_file<R: Read + SeekForward>(
+    cpio_file: &mut R,
+    header: &Header,
+    preserve_permissions: bool,
+    seen_files: &mut SeenFiles,
+    log_level: u32,
+) -> Result<()> {
+    let mut file;
+    if let Some(target) = try_get_hard_link_target(header, seen_files) {
+        if log_level >= LOG_LEVEL_DEBUG {
+            writeln!(
+                std::io::stderr(),
+                "Creating hard-link '{}' -> '{}' with permission {:o}{} and {} bytes",
+                header.filename,
+                target,
+                header.mode_perm(),
+                if preserve_permissions {
+                    format!(" and owner {}:{}", header.uid, header.gid)
+                } else {
+                    String::new()
+                },
+                header.filesize,
+            )?;
+        };
+        if let Err(e) = hard_link(target, &header.filename) {
+            match e.kind() {
+                ErrorKind::AlreadyExists => {
+                    remove_file(&header.filename)?;
+                    hard_link(target, &header.filename)?;
+                }
+                _ => {
+                    return Err(e);
+                }
+            }
+        }
+        file = OpenOptions::new().write(true).open(&header.filename)?
+    } else {
+        if log_level >= LOG_LEVEL_DEBUG {
+            writeln!(
+                std::io::stderr(),
+                "Creating file '{}' with permission {:o}{} and {} bytes",
+                header.filename,
+                header.mode_perm(),
+                if preserve_permissions {
+                    format!(" and owner {}:{}", header.uid, header.gid)
+                } else {
+                    String::new()
+                },
+                header.filesize,
+            )?;
+        };
+        file = File::create(&header.filename)?
+    };
+    header.mark_seen(seen_files);
+    let mut reader = cpio_file.take(header.filesize as u64);
+    // TODO: check writing hard-link with length == 0
+    // TODO: check overwriting existing files/hardlinks
+    let written = std::io::copy(&mut reader, &mut file)?;
+    if written != header.filesize as u64 {
+        return Err(Error::new(
+            ErrorKind::Other,
+            format!(
+                "Wrong amound of bytes written to '{}': {} != {}.",
+                header.filename, written, header.filesize
+            ),
+        ));
+    }
+    let skip = align_to_4_bytes(header.filesize);
+    cpio_file.seek_forward(skip as u64)?;
+    file.set_permissions(header.permission())?;
+    if preserve_permissions {
+        fchown(&file, Some(header.uid), Some(header.gid))?;
+    }
+    file.set_modified(from_mtime(header.mtime))?;
+    Ok(())
+}
+
+fn write_symbolic_link<R: Read + SeekForward>(
+    cpio_file: &mut R,
+    header: &Header,
+    log_level: u32,
+) -> Result<()> {
+    let align = align_to_4_bytes(header.filesize);
+    // TODO: Check namesize to fit into usize
+    let mut target_bytes = vec![0u8; (header.filesize + align) as usize];
+    cpio_file.read_exact(&mut target_bytes)?;
+    target_bytes.truncate(header.filesize as usize);
+    // TODO: propper name reading handling
+    let target = std::str::from_utf8(&target_bytes).unwrap();
+    if log_level >= LOG_LEVEL_DEBUG {
+        writeln!(
+            std::io::stderr(),
+            "Creating symlink '{}' -> '{}' with mode {:o}",
+            header.filename,
+            target,
+            header.mode_perm(),
+        )?;
+    };
+    if let Err(e) = symlink(target, &header.filename) {
+        match e.kind() {
+            ErrorKind::AlreadyExists => {
+                remove_file(&header.filename)?;
+                symlink(target, &header.filename)?;
+            }
+            _ => {
+                return Err(e);
+            }
+        }
+    }
+    if header.mode_perm() != 0o777 {
+        return Err(Error::new(
+            ErrorKind::Unsupported,
+            format!(
+                "Symlink '{}' has mode {:o}, but only mode 777 is supported.",
+                header.filename,
+                header.mode_perm()
+            ),
+        ));
+    };
+    set_modified(&header.filename, header.mtime.into())?;
+    Ok(())
+}
+
+fn read_cpio_and_extract<R: Read + SeekForward>(
+    file: &mut R,
+    preserve_permissions: bool,
+    log_level: u32,
+) -> Result<()> {
+    let mut extractor = Extractor::new();
+    loop {
+        let header = match read_cpio_header(file) {
+            Ok(header) => {
+                if header.filename == "TRAILER!!!" {
+                    break;
+                } else {
+                    header
+                }
+            }
+            Err(e) => return Err(e),
+        };
+
+        if log_level >= LOG_LEVEL_DEBUG {
+            writeln!(std::io::stderr(), "{:?}", header)?;
+        } else if log_level >= LOG_LEVEL_INFO {
+            writeln!(std::io::stderr(), "{}", header.filename)?;
+        }
+
+        match header.mode & MODE_FILETYPE_MASK {
+            FILETYPE_DIRECTORY => write_directory(
+                &header,
+                preserve_permissions,
+                log_level,
+                &mut extractor.mtimes,
+            )?,
+            FILETYPE_REGULAR_FILE => write_file(
+                file,
+                &header,
+                preserve_permissions,
+                &mut extractor.seen_files,
+                log_level,
+            )?,
+            FILETYPE_SYMLINK => write_symbolic_link(file, &header, log_level)?,
+            FILETYPE_FIFO | FILETYPE_CHARACTER_DEVICE | FILETYPE_BLOCK_DEVICE | FILETYPE_SOCKET => {
+                unimplemented!(
+                    "Mode {:o} (file {}) not implemented. Please open a bug report requesting support for this type.",
+                    header.mode, header.filename
+                )
+            }
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!(
+                        "Invalid/unknown filetype {:o}: {}",
+                        header.mode, header.filename
+                    ),
+                ))
+            }
+        };
+    }
+    extractor.set_modified_times(log_level)?;
+    Ok(())
+}
+
 fn seek_to_cpio_end(file: &mut File) -> Result<()> {
     let cpio = CpioFilenameReader { file };
     for f in cpio {
@@ -254,6 +632,37 @@ pub fn examine_cpio_content<W: Write>(mut file: File, out: &mut W) -> Result<()>
         } else {
             break;
         }
+    }
+    Ok(())
+}
+
+pub fn extract_cpio_archive(
+    mut file: File,
+    preserve_permissions: bool,
+    subdir: Option<String>,
+    log_level: u32,
+) -> Result<()> {
+    let mut count = 1;
+    let base_dir = std::env::current_dir()?;
+    loop {
+        if let Some(ref s) = subdir {
+            let mut dir = base_dir.clone();
+            dir.push(format!("{s}{count}"));
+            create_dir_ignore_existing(&dir)?;
+            std::env::set_current_dir(&dir)?;
+        }
+        let mut command = match read_magic_header(&mut file) {
+            None => return Ok(()),
+            Some(x) => x?,
+        };
+        if command.get_program() == "cpio" {
+            read_cpio_and_extract(&mut file, preserve_permissions, log_level)?;
+        } else {
+            let mut decompressed = decompress(&mut command, file)?;
+            read_cpio_and_extract(&mut decompressed, preserve_permissions, log_level)?;
+            break;
+        }
+        count += 1;
     }
     Ok(())
 }

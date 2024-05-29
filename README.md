@@ -10,8 +10,8 @@ algorithms can be used depending on what support was compiled into the Linux
 kernel. 3cpio is tailored to initramfs cpio files and will not gain support for
 other cpio formats.
 
-As of now, 3cpio supports examining and listing the content of the initramfs
-cpio.
+As of now, 3cpio supports examining, listing, and extracting the content of the
+initramfs cpio.
 
 **Note**: The Rust crate is named threecpio, because package names are not
 allowed to start with numbers.
@@ -57,6 +57,16 @@ usr/lib/firmware/3com/typhoon.bin.zst
 
 The first cpio contains only the AMD microcode. The second cpio contains only
 the Intel microcode. The third cpio contains firmware files and kernel modules.
+
+Extract the content of the initramfs cpio to the `initrd` subdirectory on an
+Ubuntu 24.04 system:
+
+```
+$ 3cpio --extract -C initrd /boot/initrd.img
+$ ls initrd
+bin   cryptroot  init    lib    lib.usr-is-merged  run   scripts  var
+conf  etc        kernel  lib64  libx32             sbin  usr
+```
 
 Quick examples comparing
 ------------------------
