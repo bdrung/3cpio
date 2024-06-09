@@ -68,8 +68,10 @@ bin   cryptroot  init    lib    lib.usr-is-merged  run   scripts  var
 conf  etc        kernel  lib64  libx32             sbin  usr
 ```
 
-Quick examples comparing
-------------------------
+Benchmark results
+-----------------
+
+### Listing the content of the initrd
 
 Runtime comparison measured with `time` over five runs on different initramfs
 cpios:
@@ -108,6 +110,19 @@ time 3cpio -t /boot/initrd.img-${version} > /dev/null
 time lsinitramfs /boot/initrd.img-${version} > /dev/null
 time lsinitrd /boot/initrd.img-${version} > /dev/null
 ```
+
+### Extracting the content of the initrd
+
+Benchmarking the time to extraction initrd:
+
+| System        | Distro   | Kernel           | Size   | Files | 3cpio  | unmkinitramfs |
+| ------------- | -------- | ---------------- | ------ | ----- | ------ | ------------- |
+| Ryzen 7 5700G | noble    | 6.8.0-35-generic |  70 MB |  2097 | 0.107s |        6.698s |
+| Ryzen 7 5700G | jammy    | 6.8.0-35-generic | 112 MB |  3789 | 0.455s |        2.217s |
+| Ryzen 7 5700G | bookworm | 6.1.0-21-amd64   |  62 MB |  2935 | 0.268s |        1.362s |
+| RasPi Zero 2W | noble    | 6.8.0-1005-raspi |  53 MB |  2534 | 5.075s |      173.847s |
+
+Raw measurements can be found in [doc/Benchmarks.md](doc/Benchmarks.md).
 
 Naming and alternatives
 -----------------------
