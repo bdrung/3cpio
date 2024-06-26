@@ -160,6 +160,7 @@ fn print_version() -> Result<(), Box<dyn Error>> {
     let stdout = String::from_utf8(stdout).expect("stdout");
     let words: Vec<&str> = stdout.split_whitespace().collect();
     assert_eq!(words.len(), 2, "not two words: '{}'", stdout);
+    assert_eq!(words[0], "3cpio");
 
     let version = words[1];
     // Simple implementation for regular expression match: [0-9.]+

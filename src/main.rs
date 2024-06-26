@@ -54,7 +54,7 @@ Optional arguments:
 }
 
 fn print_version() {
-    let name = std::option_env!("CARGO_PKG_NAME").unwrap();
+    let name = std::option_env!("CARGO_BIN_NAME").unwrap();
     let version = std::option_env!("CARGO_PKG_VERSION").unwrap();
     println!("{} {}", name, version);
 }
