@@ -94,7 +94,7 @@ impl<'a, R: Read + SeekForward> Iterator for CpioFilenameReader<'a, R> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Header {
     ino: u32,
     mode: u32,
@@ -696,5 +696,29 @@ mod tests {
     #[test]
     fn test_align_to_4_bytes_is_aligned() {
         assert_eq!(align_to_4_bytes(32), 0);
+    }
+
+    #[test]
+    fn test_read_cpio_header() {
+        // Wrapped before mtime and filename
+        let cpio_data = b"07070100000002000081B4000003E8000007D000000001\
+            661BE5C600000008000000000000000000000000000000000000000A00000000\
+            path/file\0content\0";
+        let header = read_cpio_header(&mut cpio_data.as_ref()).unwrap();
+        assert_eq!(
+            header,
+            Header {
+                ino: 2,
+                mode: 0o100664,
+                uid: 1000,
+                gid: 2000,
+                nlink: 1,
+                mtime: 1713104326,
+                filesize: 8,
+                major: 0,
+                minor: 0,
+                filename: "path/file".into()
+            }
+        )
     }
 }
