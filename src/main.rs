@@ -149,30 +149,30 @@ fn is_root() -> bool {
 }
 
 fn create_and_set_current_dir(path: &str, force: bool) -> Result<(), String> {
-    if let Err(e) = set_current_dir(&path) {
+    if let Err(e) = set_current_dir(path) {
         if e.kind() != ErrorKind::NotFound {
-            return Err(format!("Failed to change directory to '{}': {}", path, e).into());
+            return Err(format!("Failed to change directory to '{}': {}", path, e));
         }
-        if let Err(e) = create_dir(&path) {
-            return Err(format!("Failed to create directory '{}': {}", path, e).into());
+        if let Err(e) = create_dir(path) {
+            return Err(format!("Failed to create directory '{}': {}", path, e));
         }
-        if let Err(e) = set_current_dir(&path) {
-            return Err(format!("Failed to change directory to '{}': {}", path, e).into());
+        if let Err(e) = set_current_dir(path) {
+            return Err(format!("Failed to change directory to '{}': {}", path, e));
         }
     }
     if !force {
         match is_empty_directory(".") {
             Err(e) => {
-                return Err(
-                    format!("Failed to check content of directory '{}': {}", path, e).into(),
-                );
+                return Err(format!(
+                    "Failed to check content of directory '{}': {}",
+                    path, e
+                ));
             }
             Ok(false) => {
                 return Err(format!(
                     "Target directory '{}' is not empty. Use --force to overwrite existing files!",
                     path
-                )
-                .into());
+                ));
             }
             Ok(true) => {}
         }
