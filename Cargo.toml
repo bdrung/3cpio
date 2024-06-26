@@ -18,7 +18,3 @@ path = "src/main.rs"
 [dependencies]
 libc = "0.2"
 lexopt = "0.3"
-
-[dev-dependencies]
-assert_cmd = "2.0"
-predicates = "3.0"
