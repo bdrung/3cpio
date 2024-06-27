@@ -196,21 +196,19 @@ fn read_filename<R: Read>(file: &mut R, namesize: u32) -> Result<String> {
     Ok(filename.to_string())
 }
 
-fn read_cpio_header<R: Read>(file: &mut R) -> std::io::Result<Header> {
-    let mut buffer = [0; CPIO_HEADER_LENGTH as usize];
-    file.read_exact(&mut buffer)?;
-    if buffer[0..6] != CPIO_MAGIC_NUMBER {
-        // TODO: Test this case
+fn check_begins_with_cpio_magic_header(header: &[u8]) -> std::io::Result<()> {
+    if header[0..6] != CPIO_MAGIC_NUMBER {
+        // TODO: Check this case
         return Err(Error::new(
             ErrorKind::InvalidData,
             format!(
                 "Invalid CPIO magic number '{}{}{}{}{}{}'. Expected {}{}{}{}{}{}",
-                buffer[0],
-                buffer[1],
-                buffer[2],
-                buffer[3],
-                buffer[4],
-                buffer[5],
+                header[0],
+                header[1],
+                header[2],
+                header[3],
+                header[4],
+                header[5],
                 CPIO_MAGIC_NUMBER[0],
                 CPIO_MAGIC_NUMBER[1],
                 CPIO_MAGIC_NUMBER[2],
@@ -220,6 +218,13 @@ fn read_cpio_header<R: Read>(file: &mut R) -> std::io::Result<Header> {
             ),
         ));
     }
+    Ok(())
+}
+
+fn read_cpio_header<R: Read>(file: &mut R) -> std::io::Result<Header> {
+    let mut buffer = [0; CPIO_HEADER_LENGTH as usize];
+    file.read_exact(&mut buffer)?;
+    check_begins_with_cpio_magic_header(&buffer)?;
     let namesize = hex_str_to_u32(&buffer[94..102])?;
     let filename = read_filename(file, namesize)?;
     Ok(Header {
@@ -245,27 +250,7 @@ fn read_cpio_header<R: Read>(file: &mut R) -> std::io::Result<Header> {
 fn read_filename_from_next_cpio_object<R: Read + SeekForward>(file: &mut R) -> Result<String> {
     let mut header = [0; CPIO_HEADER_LENGTH as usize];
     file.read_exact(&mut header)?;
-    if header[0..6] != CPIO_MAGIC_NUMBER {
-        // TODO: Check this case
-        return Err(Error::new(
-            ErrorKind::InvalidData,
-            format!(
-                "Invalid CPIO magic number '{}{}{}{}{}{}'. Expected {}{}{}{}{}{}",
-                header[0],
-                header[1],
-                header[2],
-                header[3],
-                header[4],
-                header[5],
-                CPIO_MAGIC_NUMBER[0],
-                CPIO_MAGIC_NUMBER[1],
-                CPIO_MAGIC_NUMBER[2],
-                CPIO_MAGIC_NUMBER[3],
-                CPIO_MAGIC_NUMBER[4],
-                CPIO_MAGIC_NUMBER[5]
-            ),
-        ));
-    }
+    check_begins_with_cpio_magic_header(&header)?;
     let filesize = hex_str_to_u32(&header[54..62])?;
     let namesize = hex_str_to_u32(&header[94..102])?;
     let filename = read_filename(file, namesize)?;
