@@ -198,23 +198,12 @@ fn read_filename<R: Read>(file: &mut R, namesize: u32) -> Result<String> {
 
 fn check_begins_with_cpio_magic_header(header: &[u8]) -> std::io::Result<()> {
     if header[0..6] != CPIO_MAGIC_NUMBER {
-        // TODO: Check this case
         return Err(Error::new(
             ErrorKind::InvalidData,
             format!(
-                "Invalid CPIO magic number '{}{}{}{}{}{}'. Expected {}{}{}{}{}{}",
-                header[0],
-                header[1],
-                header[2],
-                header[3],
-                header[4],
-                header[5],
-                CPIO_MAGIC_NUMBER[0],
-                CPIO_MAGIC_NUMBER[1],
-                CPIO_MAGIC_NUMBER[2],
-                CPIO_MAGIC_NUMBER[3],
-                CPIO_MAGIC_NUMBER[4],
-                CPIO_MAGIC_NUMBER[5]
+                "Invalid CPIO magic number '{}'. Expected {}",
+                &header[0..6].escape_ascii(),
+                std::str::from_utf8(&CPIO_MAGIC_NUMBER).unwrap(),
             ),
         ));
     }
@@ -705,5 +694,17 @@ mod tests {
                 filename: "path/file".into()
             }
         )
+    }
+
+    #[test]
+    fn test_read_cpio_header_invalid_magic_number() {
+        let invalid_data = b"abc\tefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\
+            abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        let got = read_cpio_header(&mut invalid_data.as_ref()).unwrap_err();
+        assert_eq!(got.kind(), ErrorKind::InvalidData);
+        assert_eq!(
+            got.to_string(),
+            "Invalid CPIO magic number 'abc\\tef'. Expected 070701"
+        );
     }
 }
