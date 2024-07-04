@@ -171,9 +171,22 @@ fn align_to_4_bytes(length: u32) -> u32 {
 }
 
 fn hex_str_to_u32(bytes: &[u8]) -> Result<u32> {
-    // TODO: propper error handling
-    let s = std::str::from_utf8(bytes).unwrap();
-    Ok(u32::from_str_radix(s, 16).unwrap())
+    let s = match std::str::from_utf8(bytes) {
+        Err(_) => {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("Invalid hexadecimal value '{}'", bytes.escape_ascii()),
+            ))
+        }
+        Ok(value) => value,
+    };
+    match u32::from_str_radix(s, 16) {
+        Err(_) => Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("Invalid hexadecimal value '{}'", s),
+        )),
+        Ok(value) => Ok(value),
+    }
 }
 
 fn read_filename<R: Read>(file: &mut R, namesize: u32) -> Result<String> {
@@ -670,6 +683,26 @@ mod tests {
     #[test]
     fn test_align_to_4_bytes_is_aligned() {
         assert_eq!(align_to_4_bytes(32), 0);
+    }
+
+    #[test]
+    fn test_hex_str_to_u32() {
+        let value = hex_str_to_u32(b"000003E8").unwrap();
+        assert_eq!(value, 1000);
+    }
+
+    #[test]
+    fn test_hex_str_to_u32_invalid_hex() {
+        let got = hex_str_to_u32(b"something").unwrap_err();
+        assert_eq!(got.kind(), ErrorKind::InvalidData);
+        assert_eq!(got.to_string(), "Invalid hexadecimal value 'something'");
+    }
+
+    #[test]
+    fn test_hex_str_to_u32_invalid_utf8() {
+        let got = hex_str_to_u32(b"no\xc3\x28utf8").unwrap_err();
+        assert_eq!(got.kind(), ErrorKind::InvalidData);
+        assert_eq!(got.to_string(), "Invalid hexadecimal value 'no\\xc3(utf8'");
     }
 
     #[test]
