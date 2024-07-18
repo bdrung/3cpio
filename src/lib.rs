@@ -392,10 +392,10 @@ fn write_directory(
         )?;
     };
     create_dir_ignore_existing(&header.filename)?;
-    set_permissions(&header.filename, header.permission())?;
     if preserve_permissions {
         chown(&header.filename, Some(header.uid), Some(header.gid))?;
     }
+    set_permissions(&header.filename, header.permission())?;
     mtimes.insert(header.filename.to_string(), header.mtime.into());
     Ok(())
 }
@@ -480,10 +480,10 @@ fn write_file<R: Read + SeekForward>(
     }
     let skip = align_to_4_bytes(header.filesize);
     cpio_file.seek_forward(skip as u64)?;
-    file.set_permissions(header.permission())?;
     if preserve_permissions {
         fchown(&file, Some(header.uid), Some(header.gid))?;
     }
+    file.set_permissions(header.permission())?;
     file.set_modified(from_mtime(header.mtime))?;
     Ok(())
 }
