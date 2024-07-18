@@ -73,6 +73,21 @@ impl SeekForward for ChildStdout {
     }
 }
 
+impl SeekForward for &[u8] {
+    fn seek_forward(&mut self, offset: u64) -> Result<()> {
+        let mut seek_reader = std::io::Read::take(self, offset);
+        let mut buffer = Vec::new();
+        let read = seek_reader.read_to_end(&mut buffer)?;
+        if read < offset.try_into().unwrap() {
+            return Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                format!("read only {} bytes, but {} wanted", read, offset),
+            ));
+        }
+        Ok(())
+    }
+}
+
 struct CpioFilenameReader<'a, R: Read + SeekForward> {
     file: &'a mut R,
 }
@@ -674,6 +689,15 @@ pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::MetadataExt;
+
+    fn getgid() -> u32 {
+        unsafe { ::libc::getgid() }
+    }
+
+    fn getuid() -> u32 {
+        unsafe { ::libc::getuid() }
+    }
 
     #[test]
     fn test_align_to_4_bytes() {
@@ -739,5 +763,69 @@ mod tests {
             got.to_string(),
             "Invalid CPIO magic number 'abc\\tef'. Expected 070701"
         );
+    }
+
+    #[test]
+    fn test_write_directory_with_setuid() {
+        let mut mtimes = BTreeMap::new();
+        let header = Header {
+            ino: 1,
+            mode: 0o43_777,
+            uid: getuid(),
+            gid: getgid(),
+            nlink: 0,
+            mtime: 1720081471,
+            filesize: 0,
+            major: 0,
+            minor: 0,
+            filename: "./directory_with_setuid".into(),
+        };
+        write_directory(&header, true, LOG_LEVEL_WARNING, &mut mtimes).unwrap();
+
+        let attr = std::fs::metadata("directory_with_setuid").unwrap();
+        assert!(attr.is_dir());
+        assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
+        assert_eq!(attr.uid(), header.uid);
+        assert_eq!(attr.gid(), header.gid);
+        std::fs::remove_dir("directory_with_setuid").unwrap();
+
+        let mut expected_mtimes: BTreeMap<String, i64> = BTreeMap::new();
+        expected_mtimes.insert("./directory_with_setuid".into(), header.mtime.into());
+        assert_eq!(mtimes, expected_mtimes);
+    }
+
+    #[test]
+    fn test_write_file_with_setuid() {
+        let mut seen_files = SeenFiles::new();
+        let header = Header {
+            ino: 1,
+            mode: 0o104_755,
+            uid: getuid(),
+            gid: getgid(),
+            nlink: 0,
+            mtime: 1720081471,
+            filesize: 9,
+            major: 0,
+            minor: 0,
+            filename: "./file_with_setuid".into(),
+        };
+        let cpio = b"!/bin/sh\n\0\0\0";
+        write_file(
+            &mut cpio.as_ref(),
+            &header,
+            true,
+            &mut seen_files,
+            LOG_LEVEL_WARNING,
+        )
+        .unwrap();
+
+        let attr = std::fs::metadata("file_with_setuid").unwrap();
+        assert_eq!(attr.len(), header.filesize.into());
+        assert!(attr.is_file());
+        assert_eq!(attr.modified().unwrap(), from_mtime(header.mtime));
+        assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
+        assert_eq!(attr.uid(), header.uid);
+        assert_eq!(attr.gid(), header.gid);
+        std::fs::remove_file("file_with_setuid").unwrap();
     }
 }
