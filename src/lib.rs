@@ -11,7 +11,7 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 use std::io::SeekFrom;
-use std::os::unix::fs::{chown, fchown, symlink, PermissionsExt};
+use std::os::unix::fs::{chown, fchown, lchown, symlink, PermissionsExt};
 use std::process::ChildStdout;
 use std::process::Command;
 use std::process::Stdio;
@@ -506,6 +506,7 @@ fn write_file<R: Read + SeekForward>(
 fn write_symbolic_link<R: Read + SeekForward>(
     cpio_file: &mut R,
     header: &Header,
+    preserve_permissions: bool,
     log_level: u32,
 ) -> Result<()> {
     let align = align_to_4_bytes(header.filesize);
@@ -534,6 +535,9 @@ fn write_symbolic_link<R: Read + SeekForward>(
                 return Err(e);
             }
         }
+    }
+    if preserve_permissions {
+        lchown(&header.filename, Some(header.uid), Some(header.gid))?;
     }
     if header.mode_perm() != 0o777 {
         return Err(Error::new(
@@ -587,7 +591,9 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
                 &mut extractor.seen_files,
                 log_level,
             )?,
-            FILETYPE_SYMLINK => write_symbolic_link(file, &header, log_level)?,
+            FILETYPE_SYMLINK => {
+                write_symbolic_link(file, &header, preserve_permissions, log_level)?
+            }
             FILETYPE_FIFO | FILETYPE_CHARACTER_DEVICE | FILETYPE_BLOCK_DEVICE | FILETYPE_SOCKET => {
                 unimplemented!(
                     "Mode {:o} (file {}) not implemented. Please open a bug report requesting support for this type.",
@@ -827,5 +833,32 @@ mod tests {
         assert_eq!(attr.uid(), header.uid);
         assert_eq!(attr.gid(), header.gid);
         std::fs::remove_file("file_with_setuid").unwrap();
+    }
+
+    #[test]
+    fn test_write_symbolic_link() {
+        let header = Header {
+            ino: 1,
+            mode: 0o120_777,
+            uid: getuid(),
+            gid: getgid(),
+            nlink: 0,
+            mtime: 1721427072,
+            filesize: 12,
+            major: 0,
+            minor: 0,
+            filename: "./dead_symlink".into(),
+        };
+        let cpio = b"/nonexistent";
+        write_symbolic_link(&mut cpio.as_ref(), &header, true, LOG_LEVEL_WARNING).unwrap();
+
+        let attr = std::fs::symlink_metadata("dead_symlink").unwrap();
+        assert_eq!(attr.len(), header.filesize.into());
+        assert!(attr.is_symlink());
+        assert_eq!(attr.modified().unwrap(), from_mtime(header.mtime));
+        assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
+        assert_eq!(attr.uid(), header.uid);
+        assert_eq!(attr.gid(), header.gid);
+        std::fs::remove_file("dead_symlink").unwrap();
     }
 }
