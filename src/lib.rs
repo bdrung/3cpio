@@ -147,6 +147,17 @@ impl Header {
     fn mark_seen(&self, seen_files: &mut SeenFiles) {
         seen_files.insert(self.ino_and_dev(), self.filename.clone());
     }
+
+    fn read_symlink_target<R: Read>(&self, file: &mut R) -> Result<String> {
+        let align = align_to_4_bytes(self.filesize);
+        // TODO: Check namesize to fit into usize
+        let mut target_bytes = vec![0u8; (self.filesize + align) as usize];
+        file.read_exact(&mut target_bytes)?;
+        target_bytes.truncate(self.filesize as usize);
+        // TODO: propper name reading handling
+        let target = std::str::from_utf8(&target_bytes).unwrap();
+        Ok(target.into())
+    }
 }
 
 // TODO: Document hardlink structure
@@ -509,27 +520,21 @@ fn write_symbolic_link<R: Read + SeekForward>(
     preserve_permissions: bool,
     log_level: u32,
 ) -> Result<()> {
-    let align = align_to_4_bytes(header.filesize);
-    // TODO: Check namesize to fit into usize
-    let mut target_bytes = vec![0u8; (header.filesize + align) as usize];
-    cpio_file.read_exact(&mut target_bytes)?;
-    target_bytes.truncate(header.filesize as usize);
-    // TODO: propper name reading handling
-    let target = std::str::from_utf8(&target_bytes).unwrap();
+    let target = header.read_symlink_target(cpio_file)?;
     if log_level >= LOG_LEVEL_DEBUG {
         writeln!(
             std::io::stderr(),
             "Creating symlink '{}' -> '{}' with mode {:o}",
             header.filename,
-            target,
+            &target,
             header.mode_perm(),
         )?;
     };
-    if let Err(e) = symlink(target, &header.filename) {
+    if let Err(e) = symlink(&target, &header.filename) {
         match e.kind() {
             ErrorKind::AlreadyExists => {
                 remove_file(&header.filename)?;
-                symlink(target, &header.filename)?;
+                symlink(&target, &header.filename)?;
             }
             _ => {
                 return Err(e);
