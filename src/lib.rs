@@ -62,8 +62,7 @@ impl SeekForward for File {
 impl SeekForward for ChildStdout {
     fn seek_forward(&mut self, offset: u64) -> Result<()> {
         let mut seek_reader = self.take(offset);
-        // TODO: check offset fits into usize
-        let mut remaining = offset as usize;
+        let mut remaining: usize = offset.try_into().unwrap();
         let mut buffer = [0; PIPE_SIZE];
         while remaining > 0 {
             let read = seek_reader.read(&mut buffer)?;
@@ -150,10 +149,9 @@ impl Header {
 
     fn read_symlink_target<R: Read>(&self, file: &mut R) -> Result<String> {
         let align = align_to_4_bytes(self.filesize);
-        // TODO: Check namesize to fit into usize
-        let mut target_bytes = vec![0u8; (self.filesize + align) as usize];
+        let mut target_bytes = vec![0u8; (self.filesize + align).try_into().unwrap()];
         file.read_exact(&mut target_bytes)?;
-        target_bytes.truncate(self.filesize as usize);
+        target_bytes.truncate(self.filesize.try_into().unwrap());
         // TODO: propper name reading handling
         let target = std::str::from_utf8(&target_bytes).unwrap();
         Ok(target.into())
@@ -217,19 +215,19 @@ fn hex_str_to_u32(bytes: &[u8]) -> Result<u32> {
 
 fn read_filename<R: Read>(file: &mut R, namesize: u32) -> Result<String> {
     let header_align = align_to_4_bytes(CPIO_HEADER_LENGTH + namesize);
-    // TODO: Check namesize to fit into usize
-    let mut filename_bytes = vec![0u8; (namesize + header_align) as usize];
+    let mut filename_bytes = vec![0u8; (namesize + header_align).try_into().unwrap()];
+    let filename_length: usize = (namesize - 1).try_into().unwrap();
     file.read_exact(&mut filename_bytes)?;
-    if filename_bytes[namesize as usize - 1] != 0 {
+    if filename_bytes[filename_length] != 0 {
         return Err(Error::new(
             ErrorKind::InvalidData,
             format!(
                 "Entry name '{:?}' is not NULL-terminated",
-                &filename_bytes[0..namesize as usize - 1]
+                &filename_bytes[0..filename_length]
             ),
         ));
     }
-    filename_bytes.truncate(namesize as usize - 1);
+    filename_bytes.truncate(filename_length);
     // TODO: propper name reading handling
     let filename = std::str::from_utf8(&filename_bytes).unwrap();
     Ok(filename.to_string())
