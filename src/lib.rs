@@ -284,7 +284,7 @@ fn read_filename_from_next_cpio_object<R: Read + SeekForward>(file: &mut R) -> R
     let filename = read_filename(file, namesize)?;
 
     let skip = filesize + align_to_4_bytes(filesize);
-    file.seek_forward(skip as u64)?;
+    file.seek_forward(skip.into())?;
     Ok(filename)
 }
 
@@ -491,11 +491,11 @@ fn write_file<R: Read + SeekForward>(
         file = File::create(&header.filename)?
     };
     header.mark_seen(seen_files);
-    let mut reader = cpio_file.take(header.filesize as u64);
+    let mut reader = cpio_file.take(header.filesize.into());
     // TODO: check writing hard-link with length == 0
     // TODO: check overwriting existing files/hardlinks
     let written = std::io::copy(&mut reader, &mut file)?;
-    if written != header.filesize as u64 {
+    if written != header.filesize.into() {
         return Err(Error::new(
             ErrorKind::Other,
             format!(
@@ -505,7 +505,7 @@ fn write_file<R: Read + SeekForward>(
         ));
     }
     let skip = align_to_4_bytes(header.filesize);
-    cpio_file.seek_forward(skip as u64)?;
+    cpio_file.seek_forward(skip.into())?;
     if preserve_permissions {
         fchown(&file, Some(header.uid), Some(header.gid))?;
     }
