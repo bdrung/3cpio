@@ -54,7 +54,7 @@ mod tests {
 
         let mtime = new_modified.duration_since(SystemTime::UNIX_EPOCH).unwrap();
         let p = dir.clone().into_os_string().into_string().unwrap();
-        set_modified(&p, mtime.as_secs() as i64).unwrap();
+        set_modified(&p, mtime.as_secs().try_into().unwrap()).unwrap();
 
         assert_eq!(dir.metadata().unwrap().modified().unwrap(), new_modified);
         fs::remove_dir(dir).unwrap();

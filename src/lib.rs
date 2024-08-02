@@ -53,8 +53,7 @@ pub trait SeekForward {
 
 impl SeekForward for File {
     fn seek_forward(&mut self, offset: u64) -> Result<()> {
-        // TODO: Use i64::try_from(offset)
-        self.seek(SeekFrom::Current(offset as i64))?;
+        self.seek(SeekFrom::Current(offset.try_into().unwrap()))?;
         Ok(())
     }
 }
