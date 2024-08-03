@@ -17,7 +17,7 @@ use std::process::Command;
 use std::process::Stdio;
 use std::time::SystemTime;
 
-use crate::libc::set_modified;
+use crate::libc::{set_modified, strftime_local};
 
 mod libc;
 
@@ -134,6 +134,45 @@ impl Header {
         self.mode & MODE_PERMISSION_MASK
     }
 
+    // ls-style ASCII representation of the mode
+    fn mode_string(&self) -> String {
+        let ftype = match self.mode & MODE_FILETYPE_MASK {
+            FILETYPE_FIFO => 'p',
+            FILETYPE_CHARACTER_DEVICE => 'c',
+            FILETYPE_DIRECTORY => 'd',
+            FILETYPE_BLOCK_DEVICE => 'b',
+            FILETYPE_REGULAR_FILE => '-',
+            FILETYPE_SYMLINK => 'l',
+            FILETYPE_SOCKET => 's',
+            _ => '?',
+        };
+        let r_usr = if self.mode & 0o400 != 0 { 'r' } else { '-' };
+        let w_usr = if self.mode & 0o200 != 0 { 'w' } else { '-' };
+        let x_usr = match self.mode & 0o4100 {
+            0o4100 => 's', // set-uid and executable by owner
+            0o4000 => 'S', // set-uid but not executable by owner
+            0o0100 => 'x',
+            _ => '-',
+        };
+        let r_grp = if self.mode & 0o040 != 0 { 'r' } else { '-' };
+        let w_grp = if self.mode & 0o020 != 0 { 'w' } else { '-' };
+        let x_grp = match self.mode & 0o2010 {
+            0o2010 => 's', // set-gid and executable by group
+            0o2000 => 'S', // set-gid but not executable by group
+            0o0010 => 'x',
+            _ => '-',
+        };
+        let r_oth = if self.mode & 0o004 != 0 { 'r' } else { '-' };
+        let w_oth = if self.mode & 0o002 != 0 { 'w' } else { '-' };
+        let x_oth = match self.mode & 0o1001 {
+            0o1001 => 't', // sticky and executable by others
+            0o1000 => 'T', // sticky but not executable by others
+            0o0001 => 'x',
+            _ => '-',
+        };
+        format!("{ftype}{r_usr}{w_usr}{x_usr}{r_grp}{w_grp}{x_grp}{r_oth}{w_oth}{x_oth}")
+    }
+
     fn permission(&self) -> Permissions {
         PermissionsExt::from_mode(self.mode & MODE_PERMISSION_MASK)
     }
@@ -146,6 +185,27 @@ impl Header {
         seen_files.insert(self.ino_and_dev(), self.filename.clone());
     }
 
+    fn long_format(&self, now: i64, user_group_cache: &mut UserGroupCache) -> Result<String> {
+        let user = match user_group_cache.get_user(self.uid)? {
+            Some(name) => name,
+            None => self.uid.to_string(),
+        };
+        let group = match user_group_cache.get_group(self.gid)? {
+            Some(name) => name,
+            None => self.gid.to_string(),
+        };
+        Ok(format!(
+            "{} {:>3} {:<8} {:<8} {:>8} {} {}",
+            self.mode_string(),
+            self.nlink,
+            user,
+            group,
+            self.filesize,
+            format_time(self.mtime, now)?,
+            self.filename
+        ))
+    }
+
     fn read_symlink_target<R: Read>(&self, file: &mut R) -> Result<String> {
         let align = align_to_4_bytes(self.filesize);
         let mut target_bytes = vec![0u8; (self.filesize + align).try_into().unwrap()];
@@ -154,6 +214,64 @@ impl Header {
         // TODO: propper name reading handling
         let target = std::str::from_utf8(&target_bytes).unwrap();
         Ok(target.into())
+    }
+
+    fn skip_file_content<R: SeekForward>(&self, file: &mut R) -> Result<()> {
+        let skip = self.filesize + align_to_4_bytes(self.filesize);
+        file.seek_forward(skip.into())?;
+        Ok(())
+    }
+}
+
+struct UserGroupCache {
+    user_cache: HashMap<u32, Option<String>>,
+    group_cache: HashMap<u32, Option<String>>,
+}
+
+impl UserGroupCache {
+    fn new() -> Self {
+        Self {
+            user_cache: HashMap::new(),
+            group_cache: HashMap::new(),
+        }
+    }
+
+    /// Translate user ID (UID) to user name and cache result.
+    fn get_user(&mut self, uid: u32) -> Result<Option<String>> {
+        match self.user_cache.get(&uid) {
+            Some(name) => Ok(name.clone()),
+            None => {
+                let name = libc::getpwuid_name(uid)?;
+                self.user_cache.insert(uid, name.clone());
+                Ok(name)
+            }
+        }
+    }
+
+    /// Translate group ID (GID) to group name and cache result.
+    fn get_group(&mut self, gid: u32) -> Result<Option<String>> {
+        match self.group_cache.get(&gid) {
+            Some(name) => Ok(name.clone()),
+            None => {
+                let name = libc::getgrgid_name(gid)?;
+                self.group_cache.insert(gid, name.clone());
+                Ok(name)
+            }
+        }
+    }
+}
+
+/// Format the time in a similar way to coreutils' ls command.
+fn format_time(timestamp: u32, now: i64) -> Result<String> {
+    // Logic from coreutils ls command:
+    // Consider a time to be recent if it is within the past six months.
+    // A Gregorian year has 365.2425 * 24 * 60 * 60 == 31556952 seconds
+    // on the average.
+    let recent = now - i64::from(timestamp) <= 15778476;
+    if recent {
+        strftime_local("%b %e %H:%M", timestamp)
+    } else {
+        strftime_local("%b %e  %Y", timestamp)
     }
 }
 
@@ -368,6 +486,36 @@ fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
     for f in cpio {
         let filename = f?;
         writeln!(out, "{}", filename)?;
+    }
+    Ok(())
+}
+
+fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
+    file: &mut R,
+    out: &mut W,
+    now: i64,
+    user_group_cache: &mut UserGroupCache,
+) -> Result<()> {
+    loop {
+        let header = match read_cpio_header(file) {
+            Ok(header) => {
+                if header.filename == "TRAILER!!!" {
+                    break;
+                } else {
+                    header
+                }
+            }
+            Err(e) => return Err(e),
+        };
+
+        let long_format = header.long_format(now, user_group_cache)?;
+        if header.mode & MODE_FILETYPE_MASK == FILETYPE_SYMLINK {
+            let target = header.read_symlink_target(file)?;
+            writeln!(out, "{} -> {}", long_format, target)?;
+        } else {
+            header.skip_file_content(file)?;
+            writeln!(out, "{}", long_format)?;
+        }
     }
     Ok(())
 }
@@ -677,17 +825,37 @@ pub fn extract_cpio_archive(
     Ok(())
 }
 
-pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W) -> Result<()> {
+pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W, log_level: u32) -> Result<()> {
+    let mut user_group_cache = UserGroupCache::new();
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        .try_into()
+        .unwrap();
     loop {
         let mut command = match read_magic_header(&mut file) {
             None => return Ok(()),
             Some(x) => x?,
         };
         if command.get_program() == "cpio" {
-            read_cpio_and_print_filenames(&mut file, out)?;
+            if log_level >= LOG_LEVEL_INFO {
+                read_cpio_and_print_long_format(&mut file, out, now, &mut user_group_cache)?;
+            } else {
+                read_cpio_and_print_filenames(&mut file, out)?;
+            }
         } else {
             let mut decompressed = decompress(&mut command, file)?;
-            read_cpio_and_print_filenames(&mut decompressed, out)?;
+            if log_level >= LOG_LEVEL_INFO {
+                read_cpio_and_print_long_format(
+                    &mut decompressed,
+                    out,
+                    now,
+                    &mut user_group_cache,
+                )?;
+            } else {
+                read_cpio_and_print_filenames(&mut decompressed, out)?;
+            }
             break;
         }
     }
@@ -696,6 +864,8 @@ pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use super::*;
     use std::os::unix::fs::MetadataExt;
 
@@ -707,6 +877,18 @@ mod tests {
         unsafe { ::libc::getuid() }
     }
 
+    extern "C" {
+        fn tzset();
+    }
+
+    impl UserGroupCache {
+        fn insert_test_data(&mut self) {
+            self.user_cache.insert(1000, Some("user".into()));
+            self.group_cache.insert(123, Some("whoopsie".into()));
+            self.group_cache.insert(2000, None);
+        }
+    }
+
     #[test]
     fn test_align_to_4_bytes() {
         assert_eq!(align_to_4_bytes(110), 2);
@@ -715,6 +897,58 @@ mod tests {
     #[test]
     fn test_align_to_4_bytes_is_aligned() {
         assert_eq!(align_to_4_bytes(32), 0);
+    }
+
+    #[test]
+    fn test_header_long_format_file() {
+        let mut user_group_cache = UserGroupCache::new();
+        user_group_cache.insert_test_data();
+        let header = Header {
+            ino: 2,
+            mode: 0o100644,
+            uid: 1000,
+            gid: 2000,
+            nlink: 1,
+            mtime: 1678200175,
+            filesize: 8,
+            major: 0,
+            minor: 0,
+            filename: "path/file".into(),
+        };
+        let long_format = header
+            .long_format(1720737584, &mut user_group_cache)
+            .unwrap();
+        assert_eq!(
+            long_format,
+            "-rw-r--r--   1 user     2000            8 Mar  7  2023 path/file"
+        );
+    }
+
+    #[test]
+    fn test_header_long_format_directory() {
+        let mut user_group_cache = UserGroupCache::new();
+        user_group_cache.insert_test_data();
+        let header = Header {
+            ino: 1,
+            mode: 0o43777,
+            uid: 0,
+            gid: 123,
+            nlink: 2,
+            mtime: 1722213380,
+            filesize: 0,
+            major: 0,
+            minor: 0,
+            filename: "/var/crash".into(),
+        };
+        env::set_var("TZ", "UTC");
+        unsafe { tzset() };
+        let long_format = header
+            .long_format(1722389471, &mut user_group_cache)
+            .unwrap();
+        assert_eq!(
+            long_format,
+            "drwxrwsrwt   2 root     whoopsie        0 Jul 29 00:36 /var/crash"
+        );
     }
 
     #[test]
@@ -735,6 +969,59 @@ mod tests {
         let got = hex_str_to_u32(b"no\xc3\x28utf8").unwrap_err();
         assert_eq!(got.kind(), ErrorKind::InvalidData);
         assert_eq!(got.to_string(), "Invalid hexadecimal value 'no\\xc3(utf8'");
+    }
+
+    #[test]
+    fn read_read_cpio_and_print_long_format_file() {
+        // Wrapped before mtime and filename
+        let cpio_data = b"070701000036E4000081A4000000000000000000000001\
+        66A3285300000041000000000000002400000000000000000000000D00000000\
+        conf/modules\0\0\
+        linear\nmultipath\nraid0\nraid1\nraid456\nraid5\nraid6\nraid10\nefivarfs\0\0\0\0\
+        0707010000000000000000000000000000000000000001\
+        0000000000000000000000000000000000000000000000000000000B00000000\
+        TRAILER!!!\0\0\0\0";
+        let mut output = Vec::new();
+        let mut user_group_cache = UserGroupCache::new();
+        user_group_cache.insert_test_data();
+        env::set_var("TZ", "UTC");
+        unsafe { tzset() };
+        read_cpio_and_print_long_format(
+            &mut cpio_data.as_ref(),
+            &mut output,
+            1722645915,
+            &mut user_group_cache,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "-rw-r--r--   1 root     root           65 Jul 26 04:38 conf/modules\n"
+        );
+    }
+
+    #[test]
+    fn read_read_cpio_and_print_long_format_symlink() {
+        // Wrapped before mtime and filename
+        let cpio_data = b"0707010000000D0000A1FF000000000000000000000001\
+        6237389400000007000000000000000000000000000000000000000400000000\
+        bin\0\0\0usr/bin\0\
+        0707010000000000000000000000000000000000000001\
+        0000000000000000000000000000000000000000000000000000000B00000000\
+        TRAILER!!!\0\0\0\0";
+        let mut output = Vec::new();
+        let mut user_group_cache = UserGroupCache::new();
+        user_group_cache.insert_test_data();
+        read_cpio_and_print_long_format(
+            &mut cpio_data.as_ref(),
+            &mut output,
+            1722645915,
+            &mut user_group_cache,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "lrwxrwxrwx   1 root     root            7 Mar 20  2022 bin -> usr/bin\n"
+        );
     }
 
     #[test]

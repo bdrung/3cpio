@@ -217,7 +217,7 @@ fn main() -> ExitCode {
             extract_cpio_archive(file, args.preserve_permissions, args.subdir, args.log_level),
         )
     } else if args.list {
-        ("list", list_cpio_content(file, &mut stdout))
+        ("list", list_cpio_content(file, &mut stdout, args.log_level))
     } else {
         unreachable!("no operation specified");
     };
