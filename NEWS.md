@@ -1,6 +1,20 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.3.0 (2024-08-03)
+------------------
+
+### What's new
+
+* support preserving the owner/group of symlinks
+* Add `--verbose` mode to `--list` mode. The output will be similar to
+  `cpio --list --verbose` and `ls -l`.
+
+### Fixed
+
+* 3cpio: fix setting the directory/file permissions
+  ([bug #5](https://github.com/bdrung/3cpio/issues/5))
+
 0.2.0 (2024-07-05)
 ------------------
 
