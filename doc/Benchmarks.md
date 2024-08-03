@@ -54,6 +54,66 @@ Summary
 | `3cpio -t /boot/initrd.img` | 0.697 ± 0.003 | 0.692 | 0.703 | 1.00 |
 | `lsinitramfs /boot/initrd.img` | 165.425 ± 7.986 | 154.661 | 176.996 | 237.45 ± 11.51 |
 
+Benchmark results on a Raspberry Pi Zero 2W running Ubuntu 24.04 (noble) arm64
+on 2024-08-03:
+
+```
+$ sudo 3cpio -x /boot/initrd.img -C /var/tmp/initrd
+$ ( cd /var/tmp/initrd && find . | LC_ALL=C sort | sudo cpio --reproducible --quiet -o -H newc ) > initrd.img
+$ ls -l initrd.img
+-rw-rw-r-- 1 user user 75868160 Aug  3 02:10 initrd.img
+$ 3cpio -t initrd.img | wc -l
+2529
+$ 3cpio -e initrd.img
+0	cpio
+$ hyperfine --warmup 1 "3cpio -t initrd.img" "bsdcpio -it < initrd.img" "cpio -t < initrd.img" --export-markdown list.md
+Benchmark 1: 3cpio -t initrd.img
+  Time (mean ± σ):      85.7 ms ±   2.3 ms    [User: 25.0 ms, System: 60.3 ms]
+  Range (min … max):    82.0 ms …  90.4 ms    31 runs
+
+Benchmark 2: bsdcpio -it < initrd.img
+  Time (mean ± σ):     100.4 ms ±   2.6 ms    [User: 30.5 ms, System: 69.1 ms]
+  Range (min … max):    96.4 ms … 109.1 ms    27 runs
+
+Benchmark 3: cpio -t < initrd.img
+  Time (mean ± σ):      1.330 s ±  0.002 s    [User: 0.278 s, System: 1.048 s]
+  Range (min … max):    1.327 s …  1.332 s    10 runs
+
+Summary
+  3cpio -t initrd.img ran
+    1.17 ± 0.04 times faster than bsdcpio -it < initrd.img
+   15.52 ± 0.41 times faster than cpio -t < initrd.img
+$ hyperfine --warmup 1 "3cpio -tv initrd.img" "bsdcpio -itv < initrd.img" "cpio -tv < initrd.img" --export-markdown list-verbose.md
+Benchmark 1: 3cpio -tv initrd.img
+  Time (mean ± σ):     127.2 ms ±   1.9 ms    [User: 62.0 ms, System: 64.6 ms]
+  Range (min … max):   123.3 ms … 130.9 ms    21 runs
+
+Benchmark 2: bsdcpio -itv < initrd.img
+  Time (mean ± σ):     116.0 ms ±   1.8 ms    [User: 43.8 ms, System: 71.5 ms]
+  Range (min … max):   113.1 ms … 120.9 ms    23 runs
+
+Benchmark 3: cpio -tv < initrd.img
+  Time (mean ± σ):      1.434 s ±  0.003 s    [User: 0.324 s, System: 1.104 s]
+  Range (min … max):    1.429 s …  1.438 s    10 runs
+
+Summary
+  bsdcpio -itv < initrd.img ran
+    1.10 ± 0.02 times faster than 3cpio -tv initrd.img
+   12.37 ± 0.20 times faster than cpio -tv < initrd.img
+```
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -t initrd.img` | 85.7 ± 2.3 | 82.0 | 90.4 | 1.00 |
+| `bsdcpio -it < initrd.img` | 100.4 ± 2.6 | 96.4 | 109.1 | 1.17 ± 0.04 |
+| `cpio -t < initrd.img` | 1329.9 ± 2.0 | 1326.5 | 1332.5 | 15.52 ± 0.41 |
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -tv initrd.img` | 127.2 ± 1.9 | 123.3 | 130.9 | 1.10 ± 0.02 |
+| `bsdcpio -itv < initrd.img` | 116.0 ± 1.8 | 113.1 | 120.9 | 1.00 |
+| `cpio -tv < initrd.img` | 1434.0 ± 2.8 | 1429.5 | 1437.8 | 12.37 ± 0.20 |
+
 AMD Ryzen 7 5700G
 -----------------
 
@@ -210,3 +270,67 @@ Summary
 |:---|---:|---:|---:|---:|
 | `3cpio -t /boot/initrd.img` | 210.0 ± 2.3 | 207.1 | 214.7 | 1.00 |
 | `lsinitramfs /boot/initrd.img-6.1.0-21-amd64` | 571.8 ± 1.9 | 568.7 | 574.5 | 2.72 ± 0.03 |
+
+Benchmark results on a desktop machine with an AMD Ryzen 7 5700G running Ubuntu
+24.04 (noble) on 2024-08-03. The tests were done in chroots that use overlayfs
+on tmpfs for writes:
+
+```
+$ schroot-wrapper -p initramfs-tools,linux-image-generic,firmware-linux,zstd,cryptsetup-initramfs,lvm2,kbd,mdadm,ntfs-3g,plymouth,console-setup,libarchive-tools,hyperfine -u root -c bookworm
+(bookworm)root@desktop:~# mv /boot/initrd.img-6.1.0-23-amd64{,.zstd}
+(bookworm)root@desktop:~# zstd --rm -d /boot/initrd.img-6.1.0-23-amd64.zstd
+(bookworm)root@desktop:~# ( cd /boot && ln -s initrd.img-* initrd.img )
+(bookworm)root@desktop:~# ls -l /boot/initrd.img*
+lrwxrwxrwx 1 root root        25 Aug  3 01:33 /boot/initrd.img -> initrd.img-6.1.0-23-amd64
+-rw-r--r-- 1 root root 282020864 Aug  3 01:31 /boot/initrd.img-6.1.0-23-amd64
+(bookworm)root@desktop:~# 3cpio -t /boot/initrd.img | wc -l
+2935
+(bookworm)root@desktop:~# 3cpio -e /boot/initrd.img
+0	cpio
+(bookworm)root@desktop:~# hyperfine --warmup 1 "3cpio -t /boot/initrd.img" "bsdcpio -it < /boot/initrd.img" "cpio -t < /boot/initrd.img" --export-markdown list.md
+Benchmark 1: 3cpio -t /boot/initrd.img
+  Time (mean ± σ):       7.0 ms ±   0.1 ms    [User: 1.5 ms, System: 5.5 ms]
+  Range (min … max):     6.6 ms …   7.3 ms    389 runs
+
+Benchmark 2: bsdcpio -it < /boot/initrd.img
+  Time (mean ± σ):      12.3 ms ±   0.4 ms    [User: 2.6 ms, System: 9.7 ms]
+  Range (min … max):    11.3 ms …  13.9 ms    218 runs
+
+Benchmark 3: cpio -t < /boot/initrd.img
+  Time (mean ± σ):     390.7 ms ±   1.9 ms    [User: 42.3 ms, System: 348.2 ms]
+  Range (min … max):   388.1 ms … 394.4 ms    10 runs
+
+Summary
+  '3cpio -t /boot/initrd.img' ran
+    1.76 ± 0.07 times faster than 'bsdcpio -it < /boot/initrd.img'
+   56.09 ± 1.11 times faster than 'cpio -t < /boot/initrd.img'
+(bookworm)root@desktop:~# hyperfine --warmup 1 "3cpio -tv /boot/initrd.img" "bsdcpio -itv < /boot/initrd.img" "cpio -tv < /boot/initrd.img" --export-markdown list-verbose.md
+Benchmark 1: 3cpio -tv /boot/initrd.img
+  Time (mean ± σ):       9.9 ms ±   0.1 ms    [User: 3.8 ms, System: 6.1 ms]
+  Range (min … max):     9.6 ms …  10.3 ms    280 runs
+
+Benchmark 2: bsdcpio -itv < /boot/initrd.img
+  Time (mean ± σ):      14.1 ms ±   0.5 ms    [User: 3.9 ms, System: 10.1 ms]
+  Range (min … max):    12.9 ms …  15.5 ms    200 runs
+
+Benchmark 3: cpio -tv < /boot/initrd.img
+  Time (mean ± σ):     405.7 ms ±   2.4 ms    [User: 46.4 ms, System: 359.2 ms]
+  Range (min … max):   403.5 ms … 410.8 ms    10 runs
+
+Summary
+  '3cpio -tv /boot/initrd.img' ran
+    1.42 ± 0.05 times faster than 'bsdcpio -itv < /boot/initrd.img'
+   40.97 ± 0.58 times faster than 'cpio -tv < /boot/initrd.img'
+```
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -t /boot/initrd.img` | 7.0 ± 0.1 | 6.6 | 7.3 | 1.00 |
+| `bsdcpio -it < /boot/initrd.img` | 12.3 ± 0.4 | 11.3 | 13.9 | 1.76 ± 0.07 |
+| `cpio -t < /boot/initrd.img` | 390.7 ± 1.9 | 388.1 | 394.4 | 56.09 ± 1.11 |
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -tv /boot/initrd.img` | 9.9 ± 0.1 | 9.6 | 10.3 | 1.00 |
+| `bsdcpio -itv < /boot/initrd.img` | 14.1 ± 0.5 | 12.9 | 15.5 | 1.42 ± 0.05 |
+| `cpio -tv < /boot/initrd.img` | 405.7 ± 2.4 | 403.5 | 410.8 | 40.97 ± 0.58 |

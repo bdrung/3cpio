@@ -111,6 +111,22 @@ time lsinitramfs /boot/initrd.img-${version} > /dev/null
 time lsinitrd /boot/initrd.img-${version} > /dev/null
 ```
 
+List the content of single cpio archive that is not compressed (see
+[doc/Benchmarks.md](doc/Benchmarks.md) for details) on an AMD Ryzen 7 5700G
+system:
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -t /boot/initrd.img` | 7.0 ± 0.1 | 6.6 | 7.3 | 1.00 |
+| `bsdcpio -it < /boot/initrd.img` | 12.3 ± 0.4 | 11.3 | 13.9 | 1.76 ± 0.07 |
+| `cpio -t < /boot/initrd.img` | 390.7 ± 1.9 | 388.1 | 394.4 | 56.09 ± 1.11 |
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -tv /boot/initrd.img` | 9.9 ± 0.1 | 9.6 | 10.3 | 1.00 |
+| `bsdcpio -itv < /boot/initrd.img` | 14.1 ± 0.5 | 12.9 | 15.5 | 1.42 ± 0.05 |
+| `cpio -tv < /boot/initrd.img` | 405.7 ± 2.4 | 403.5 | 410.8 | 40.97 ± 0.58 |
+
 ### Extracting the content of the initrd
 
 Benchmarking the time to extraction initrd:
