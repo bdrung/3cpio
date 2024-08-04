@@ -9,9 +9,17 @@ use std::io::{Error, ErrorKind, Result};
 /// password file /etc/passwd, NIS, and LDAP) that matches the user ID uid.
 pub fn getpwuid_name(uid: u32) -> Result<Option<String>> {
     let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
-    let mut buf = [0i8; 2048];
+    let mut buf = [0u8; 2048];
     let mut result = std::ptr::null_mut::<libc::passwd>();
-    let rc = unsafe { libc::getpwuid_r(uid, &mut pwd, buf.as_mut_ptr(), buf.len(), &mut result) };
+    let rc = unsafe {
+        libc::getpwuid_r(
+            uid,
+            &mut pwd,
+            buf.as_mut_ptr() as *mut libc::c_char,
+            buf.len(),
+            &mut result,
+        )
+    };
     if rc != 0 {
         return Err(Error::last_os_error());
     }
@@ -30,9 +38,17 @@ pub fn getpwuid_name(uid: u32) -> Result<Option<String>> {
 /// group file /etc/group, NIS, and LDAP) that matches the group ID gid.
 pub fn getgrgid_name(gid: u32) -> Result<Option<String>> {
     let mut group: libc::group = unsafe { std::mem::zeroed() };
-    let mut buf = [0i8; 2048];
+    let mut buf = [0u8; 2048];
     let mut result = std::ptr::null_mut::<libc::group>();
-    let rc = unsafe { libc::getgrgid_r(gid, &mut group, buf.as_mut_ptr(), buf.len(), &mut result) };
+    let rc = unsafe {
+        libc::getgrgid_r(
+            gid,
+            &mut group,
+            buf.as_mut_ptr() as *mut libc::c_char,
+            buf.len(),
+            &mut result,
+        )
+    };
     if rc != 0 {
         return Err(Error::last_os_error());
     }
@@ -68,7 +84,8 @@ pub fn set_modified(path: &str, mtime: i64) -> Result<()> {
 fn strftime(format: &str, tm: &libc::tm) -> Result<String> {
     let f = CString::new(format)?;
     let mut s = [0u8; 19];
-    let length = unsafe { libc::strftime(s.as_mut_ptr() as *mut i8, s.len(), f.as_ptr(), tm) };
+    let length =
+        unsafe { libc::strftime(s.as_mut_ptr() as *mut libc::c_char, s.len(), f.as_ptr(), tm) };
     if length == 0 {
         return Err(Error::new(ErrorKind::Other, "strftime returned 0"));
     }
