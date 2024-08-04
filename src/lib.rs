@@ -186,28 +186,6 @@ impl Header {
         seen_files.insert(self.ino_and_dev(), self.filename.clone());
     }
 
-    fn long_format(&self, now: i64, user_group_cache: &mut UserGroupCache) -> Result<String> {
-        let user = match user_group_cache.get_user(self.uid)? {
-            Some(name) => name,
-            None => self.uid.to_string(),
-        };
-        let group = match user_group_cache.get_group(self.gid)? {
-            Some(name) => name,
-            None => self.gid.to_string(),
-        };
-        let mode_string = self.mode_string();
-        Ok(format!(
-            "{} {:>3} {:<8} {:<8} {:>8} {} {}",
-            std::str::from_utf8(&mode_string).unwrap(),
-            self.nlink,
-            user,
-            group,
-            self.filesize,
-            format_time(self.mtime, now)?,
-            self.filename
-        ))
-    }
-
     fn read_symlink_target<R: Read>(&self, file: &mut R) -> Result<String> {
         let align = align_to_4_bytes(self.filesize);
         let mut target_bytes = vec![0u8; (self.filesize + align).try_into().unwrap()];
@@ -510,14 +488,44 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
             Err(e) => return Err(e),
         };
 
-        let long_format = header.long_format(now, user_group_cache)?;
+        let user = match user_group_cache.get_user(header.uid)? {
+            Some(name) => name,
+            None => header.uid.to_string(),
+        };
+        let group = match user_group_cache.get_group(header.gid)? {
+            Some(name) => name,
+            None => header.gid.to_string(),
+        };
+        let mode_string = header.mode_string();
+
         if header.mode & MODE_FILETYPE_MASK == FILETYPE_SYMLINK {
             let target = header.read_symlink_target(file)?;
-            writeln!(out, "{} -> {}", long_format, target)?;
+            writeln!(
+                out,
+                "{} {:>3} {:<8} {:<8} {:>8} {} {} -> {}",
+                std::str::from_utf8(&mode_string).unwrap(),
+                header.nlink,
+                user,
+                group,
+                header.filesize,
+                format_time(header.mtime, now)?,
+                header.filename,
+                target
+            )?;
         } else {
             header.skip_file_content(file)?;
-            writeln!(out, "{}", long_format)?;
-        }
+            writeln!(
+                out,
+                "{} {:>3} {:<8} {:<8} {:>8} {} {}",
+                std::str::from_utf8(&mode_string).unwrap(),
+                header.nlink,
+                user,
+                group,
+                header.filesize,
+                format_time(header.mtime, now)?,
+                header.filename
+            )?;
+        };
     }
     Ok(())
 }
@@ -902,58 +910,6 @@ mod tests {
     }
 
     #[test]
-    fn test_header_long_format_file() {
-        let mut user_group_cache = UserGroupCache::new();
-        user_group_cache.insert_test_data();
-        let header = Header {
-            ino: 2,
-            mode: 0o100644,
-            uid: 1000,
-            gid: 2000,
-            nlink: 1,
-            mtime: 1678200175,
-            filesize: 8,
-            major: 0,
-            minor: 0,
-            filename: "path/file".into(),
-        };
-        let long_format = header
-            .long_format(1720737584, &mut user_group_cache)
-            .unwrap();
-        assert_eq!(
-            long_format,
-            "-rw-r--r--   1 user     2000            8 Mar  7  2023 path/file"
-        );
-    }
-
-    #[test]
-    fn test_header_long_format_directory() {
-        let mut user_group_cache = UserGroupCache::new();
-        user_group_cache.insert_test_data();
-        let header = Header {
-            ino: 1,
-            mode: 0o43777,
-            uid: 0,
-            gid: 123,
-            nlink: 2,
-            mtime: 1722213380,
-            filesize: 0,
-            major: 0,
-            minor: 0,
-            filename: "/var/crash".into(),
-        };
-        env::set_var("TZ", "UTC");
-        unsafe { tzset() };
-        let long_format = header
-            .long_format(1722389471, &mut user_group_cache)
-            .unwrap();
-        assert_eq!(
-            long_format,
-            "drwxrwsrwt   2 root     whoopsie        0 Jul 29 00:36 /var/crash"
-        );
-    }
-
-    #[test]
     fn test_hex_str_to_u32() {
         let value = hex_str_to_u32(b"000003E8").unwrap();
         assert_eq!(value, 1000);
@@ -974,9 +930,36 @@ mod tests {
     }
 
     #[test]
+    fn test_read_cpio_and_print_long_format_directory() {
+        // Wrapped before mtime and filename
+        let cpio_data = b"07070100000001000047FF000000000000007B00000002\
+        66A6E40400000000000000000000000000000000000000000000000B00000000\
+        /var/crash\0\0\0\0\
+        0707010000000000000000000000000000000000000001\
+        0000000000000000000000000000000000000000000000000000000B00000000\
+        TRAILER!!!\0\0\0\0";
+        let mut output = Vec::new();
+        let mut user_group_cache = UserGroupCache::new();
+        user_group_cache.insert_test_data();
+        env::set_var("TZ", "UTC");
+        unsafe { tzset() };
+        read_cpio_and_print_long_format(
+            &mut cpio_data.as_ref(),
+            &mut output,
+            1722389471,
+            &mut user_group_cache,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "drwxrwsrwt   2 root     whoopsie        0 Jul 29 00:36 /var/crash\n"
+        );
+    }
+
+    #[test]
     fn test_read_cpio_and_print_long_format_file() {
         // Wrapped before mtime and filename
-        let cpio_data = b"070701000036E4000081A4000000000000000000000001\
+        let cpio_data = b"070701000036E4000081A4000003E8000007D000000001\
         66A3285300000041000000000000002400000000000000000000000D00000000\
         conf/modules\0\0\
         linear\nmultipath\nraid0\nraid1\nraid456\nraid5\nraid6\nraid10\nefivarfs\0\0\0\0\
@@ -997,7 +980,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
-            "-rw-r--r--   1 root     root           65 Jul 26 04:38 conf/modules\n"
+            "-rw-r--r--   1 user     2000           65 Jul 26 04:38 conf/modules\n"
         );
     }
 
