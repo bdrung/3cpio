@@ -135,42 +135,43 @@ impl Header {
     }
 
     // ls-style ASCII representation of the mode
-    fn mode_string(&self) -> String {
-        let ftype = match self.mode & MODE_FILETYPE_MASK {
-            FILETYPE_FIFO => 'p',
-            FILETYPE_CHARACTER_DEVICE => 'c',
-            FILETYPE_DIRECTORY => 'd',
-            FILETYPE_BLOCK_DEVICE => 'b',
-            FILETYPE_REGULAR_FILE => '-',
-            FILETYPE_SYMLINK => 'l',
-            FILETYPE_SOCKET => 's',
-            _ => '?',
-        };
-        let r_usr = if self.mode & 0o400 != 0 { 'r' } else { '-' };
-        let w_usr = if self.mode & 0o200 != 0 { 'w' } else { '-' };
-        let x_usr = match self.mode & 0o4100 {
-            0o4100 => 's', // set-uid and executable by owner
-            0o4000 => 'S', // set-uid but not executable by owner
-            0o0100 => 'x',
-            _ => '-',
-        };
-        let r_grp = if self.mode & 0o040 != 0 { 'r' } else { '-' };
-        let w_grp = if self.mode & 0o020 != 0 { 'w' } else { '-' };
-        let x_grp = match self.mode & 0o2010 {
-            0o2010 => 's', // set-gid and executable by group
-            0o2000 => 'S', // set-gid but not executable by group
-            0o0010 => 'x',
-            _ => '-',
-        };
-        let r_oth = if self.mode & 0o004 != 0 { 'r' } else { '-' };
-        let w_oth = if self.mode & 0o002 != 0 { 'w' } else { '-' };
-        let x_oth = match self.mode & 0o1001 {
-            0o1001 => 't', // sticky and executable by others
-            0o1000 => 'T', // sticky but not executable by others
-            0o0001 => 'x',
-            _ => '-',
-        };
-        format!("{ftype}{r_usr}{w_usr}{x_usr}{r_grp}{w_grp}{x_grp}{r_oth}{w_oth}{x_oth}")
+    fn mode_string(&self) -> [u8; 10] {
+        [
+            match self.mode & MODE_FILETYPE_MASK {
+                FILETYPE_FIFO => b'p',
+                FILETYPE_CHARACTER_DEVICE => b'c',
+                FILETYPE_DIRECTORY => b'd',
+                FILETYPE_BLOCK_DEVICE => b'b',
+                FILETYPE_REGULAR_FILE => b'-',
+                FILETYPE_SYMLINK => b'l',
+                FILETYPE_SOCKET => b's',
+                _ => b'?',
+            },
+            if self.mode & 0o400 != 0 { b'r' } else { b'-' },
+            if self.mode & 0o200 != 0 { b'w' } else { b'-' },
+            match self.mode & 0o4100 {
+                0o4100 => b's', // set-uid and executable by owner
+                0o4000 => b'S', // set-uid but not executable by owner
+                0o0100 => b'x',
+                _ => b'-',
+            },
+            if self.mode & 0o040 != 0 { b'r' } else { b'-' },
+            if self.mode & 0o020 != 0 { b'w' } else { b'-' },
+            match self.mode & 0o2010 {
+                0o2010 => b's', // set-gid and executable by group
+                0o2000 => b'S', // set-gid but not executable by group
+                0o0010 => b'x',
+                _ => b'-',
+            },
+            if self.mode & 0o004 != 0 { b'r' } else { b'-' },
+            if self.mode & 0o002 != 0 { b'w' } else { b'-' },
+            match self.mode & 0o1001 {
+                0o1001 => b't', // sticky and executable by others
+                0o1000 => b'T', // sticky but not executable by others
+                0o0001 => b'x',
+                _ => b'-',
+            },
+        ]
     }
 
     fn permission(&self) -> Permissions {
@@ -194,9 +195,10 @@ impl Header {
             Some(name) => name,
             None => self.gid.to_string(),
         };
+        let mode_string = self.mode_string();
         Ok(format!(
             "{} {:>3} {:<8} {:<8} {:>8} {} {}",
-            self.mode_string(),
+            std::str::from_utf8(&mode_string).unwrap(),
             self.nlink,
             user,
             group,
