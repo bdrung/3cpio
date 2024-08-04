@@ -974,7 +974,7 @@ mod tests {
     }
 
     #[test]
-    fn read_read_cpio_and_print_long_format_file() {
+    fn test_read_cpio_and_print_long_format_file() {
         // Wrapped before mtime and filename
         let cpio_data = b"070701000036E4000081A4000000000000000000000001\
         66A3285300000041000000000000002400000000000000000000000D00000000\
@@ -1002,7 +1002,7 @@ mod tests {
     }
 
     #[test]
-    fn read_read_cpio_and_print_long_format_symlink() {
+    fn test_read_cpio_and_print_long_format_symlink() {
         // Wrapped before mtime and filename
         let cpio_data = b"0707010000000D0000A1FF000000000000000000000001\
         6237389400000007000000000000000000000000000000000000000400000000\
