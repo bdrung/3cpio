@@ -8,13 +8,13 @@ use std::io::{Error, ErrorKind, Result};
 /// broken-out fields of the record in the password database (e.g., the local
 /// password file /etc/passwd, NIS, and LDAP) that matches the user ID uid.
 pub fn getpwuid_name(uid: u32) -> Result<Option<String>> {
-    let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut pwd = std::mem::MaybeUninit::<libc::passwd>::uninit();
     let mut buf = [0u8; 2048];
     let mut result = std::ptr::null_mut::<libc::passwd>();
     let rc = unsafe {
         libc::getpwuid_r(
             uid,
-            &mut pwd,
+            pwd.as_mut_ptr(),
             buf.as_mut_ptr() as *mut libc::c_char,
             buf.len(),
             &mut result,
@@ -37,13 +37,13 @@ pub fn getpwuid_name(uid: u32) -> Result<Option<String>> {
 /// broken-out fields of the record in the group database (e.g., the local
 /// group file /etc/group, NIS, and LDAP) that matches the group ID gid.
 pub fn getgrgid_name(gid: u32) -> Result<Option<String>> {
-    let mut group: libc::group = unsafe { std::mem::zeroed() };
+    let mut group = std::mem::MaybeUninit::<libc::group>::uninit();
     let mut buf = [0u8; 2048];
     let mut result = std::ptr::null_mut::<libc::group>();
     let rc = unsafe {
         libc::getgrgid_r(
             gid,
-            &mut group,
+            group.as_mut_ptr(),
             buf.as_mut_ptr() as *mut libc::c_char,
             buf.len(),
             &mut result,
