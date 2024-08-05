@@ -81,7 +81,7 @@ pub fn set_modified(path: &str, mtime: i64) -> Result<()> {
     Ok(())
 }
 
-fn strftime(format: &str, tm: &libc::tm) -> Result<String> {
+fn strftime(format: &str, tm: *mut libc::tm) -> Result<String> {
     let f = CString::new(format)?;
     let mut s = [0u8; 19];
     let length =
@@ -94,11 +94,11 @@ fn strftime(format: &str, tm: &libc::tm) -> Result<String> {
 
 pub fn strftime_local(format: &str, timestamp: u32) -> Result<String> {
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    let rc = unsafe { libc::localtime_r(&timestamp.into(), &mut tm) };
-    if rc.is_null() {
+    let result = unsafe { libc::localtime_r(&timestamp.into(), &mut tm) };
+    if result.is_null() {
         return Err(Error::last_os_error());
     };
-    strftime(format, &tm)
+    strftime(format, result)
 }
 
 #[cfg(test)]
