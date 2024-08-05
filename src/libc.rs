@@ -26,7 +26,7 @@ pub fn getpwuid_name(uid: u32) -> Result<Option<String>> {
     if result.is_null() {
         return Ok(None);
     }
-    let name = unsafe { core::ffi::CStr::from_ptr(pwd.pw_name) };
+    let name = unsafe { core::ffi::CStr::from_ptr((*result).pw_name) };
     Ok(Some(name.to_string_lossy().to_string()))
 }
 
@@ -55,7 +55,7 @@ pub fn getgrgid_name(gid: u32) -> Result<Option<String>> {
     if result.is_null() {
         return Ok(None);
     }
-    let name = unsafe { core::ffi::CStr::from_ptr(group.gr_name) };
+    let name = unsafe { core::ffi::CStr::from_ptr((*result).gr_name) };
     Ok(Some(name.to_string_lossy().to_string()))
 }
 
