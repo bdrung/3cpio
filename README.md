@@ -112,20 +112,19 @@ time lsinitrd /boot/initrd.img-${version} > /dev/null
 ```
 
 List the content of single cpio archive that is not compressed (see
-[doc/Benchmarks.md](doc/Benchmarks.md) for details) on an AMD Ryzen 7 5700G
-system:
+[doc/Benchmarks.md](doc/Benchmarks.md) for details) on a Raspberry Pi Zero 2W:
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `3cpio -t /boot/initrd.img` | 7.0 ± 0.1 | 6.6 | 7.3 | 1.00 |
-| `bsdcpio -it < /boot/initrd.img` | 12.3 ± 0.4 | 11.3 | 13.9 | 1.76 ± 0.07 |
-| `cpio -t < /boot/initrd.img` | 390.7 ± 1.9 | 388.1 | 394.4 | 56.09 ± 1.11 |
+| `3cpio -t initrd.img` | 84.3 ± 1.1 | 82.1 | 87.0 | 1.00 |
+| `bsdcpio -itF initrd.img` | 98.4 ± 0.9 | 96.4 | 101.0 | 1.17 ± 0.02 |
+| `cpio -t --file initrd.img` | 1321.2 ± 2.8 | 1314.6 | 1327.6 | 15.68 ± 0.20 |
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `3cpio -tv /boot/initrd.img` | 9.9 ± 0.1 | 9.6 | 10.3 | 1.00 |
-| `bsdcpio -itv < /boot/initrd.img` | 14.1 ± 0.5 | 12.9 | 15.5 | 1.42 ± 0.05 |
-| `cpio -tv < /boot/initrd.img` | 405.7 ± 2.4 | 403.5 | 410.8 | 40.97 ± 0.58 |
+| `3cpio -tv initrd.img` | 109.2 ± 1.1 | 106.9 | 111.7 | 1.00 |
+| `bsdcpio -itvF initrd.img` | 114.9 ± 1.1 | 112.6 | 117.4 | 1.05 ± 0.01 |
+| `cpio -tv --file initrd.img` | 1423.0 ± 3.5 | 1417.1 | 1440.6 | 13.03 ± 0.13 |
 
 ### Extracting the content of the initrd
 
