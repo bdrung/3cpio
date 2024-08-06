@@ -249,9 +249,9 @@ fn format_time(timestamp: u32, now: i64) -> Result<String> {
     // on the average.
     let recent = now - i64::from(timestamp) <= 15778476;
     if recent {
-        strftime_local("%b %e %H:%M", timestamp)
+        strftime_local(b"%b %e %H:%M\0", timestamp)
     } else {
-        strftime_local("%b %e  %Y", timestamp)
+        strftime_local(b"%b %e  %Y\0", timestamp)
     }
 }
 

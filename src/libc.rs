@@ -1,4 +1,4 @@
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::io::{Error, ErrorKind, Result};
 
 /// Get password file entry and return user name.
@@ -81,18 +81,24 @@ pub fn set_modified(path: &str, mtime: i64) -> Result<()> {
     Ok(())
 }
 
-fn strftime(format: &str, tm: *mut libc::tm) -> Result<String> {
-    let f = CString::new(format)?;
+// TODO: Use c"…" string literal for `format` once stable
+fn strftime(format: &[u8], tm: *mut libc::tm) -> Result<String> {
     let mut s = [0u8; 19];
-    let length =
-        unsafe { libc::strftime(s.as_mut_ptr() as *mut libc::c_char, s.len(), f.as_ptr(), tm) };
+    let length = unsafe {
+        libc::strftime(
+            s.as_mut_ptr() as *mut libc::c_char,
+            s.len(),
+            CStr::from_bytes_with_nul_unchecked(format).as_ptr(),
+            tm,
+        )
+    };
     if length == 0 {
         return Err(Error::new(ErrorKind::Other, "strftime returned 0"));
     }
     Ok(String::from_utf8_lossy(&s[..length]).to_string())
 }
 
-pub fn strftime_local(format: &str, timestamp: u32) -> Result<String> {
+pub fn strftime_local(format: &[u8], timestamp: u32) -> Result<String> {
     let mut tm = std::mem::MaybeUninit::<libc::tm>::uninit();
     let result = unsafe { libc::localtime_r(&timestamp.into(), tm.as_mut_ptr()) };
     if result.is_null() {
@@ -170,7 +176,7 @@ mod tests {
 
     #[test]
     fn test_strftime_local_year() {
-        let time = strftime_local("%b %e  %Y", 2278410030).unwrap();
+        let time = strftime_local(b"%b %e  %Y\0", 2278410030).unwrap();
         assert_eq!(time, "Mar 14  2042");
     }
 
@@ -178,7 +184,7 @@ mod tests {
     fn test_strftime_local_hour() {
         std::env::set_var("TZ", "UTC");
         unsafe { tzset() };
-        let time = strftime_local("%b %e %H:%M", 1720735264).unwrap();
+        let time = strftime_local(b"%b %e %H:%M\0", 1720735264).unwrap();
         assert_eq!(time, "Jul 11 22:01");
     }
 }
