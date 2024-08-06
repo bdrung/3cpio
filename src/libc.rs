@@ -93,8 +93,8 @@ fn strftime(format: &str, tm: *mut libc::tm) -> Result<String> {
 }
 
 pub fn strftime_local(format: &str, timestamp: u32) -> Result<String> {
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    let result = unsafe { libc::localtime_r(&timestamp.into(), &mut tm) };
+    let mut tm = std::mem::MaybeUninit::<libc::tm>::uninit();
+    let result = unsafe { libc::localtime_r(&timestamp.into(), tm.as_mut_ptr()) };
     if result.is_null() {
         return Err(Error::last_os_error());
     };
