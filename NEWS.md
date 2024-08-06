@@ -1,6 +1,14 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.3.1 (2024-08-06)
+------------------
+
+### What's new
+
+* Various changes to speed up `3cpio --list --verbose` to make 3cpio faster
+  than bsdcpio in all benchmarks.
+
 0.3.0 (2024-08-03)
 ------------------
 

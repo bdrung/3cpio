@@ -1,6 +1,6 @@
 [package]
 name = "threecpio"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = ["Benjamin Drung <bdrung@posteo.de>"]
 license = "ISC"
