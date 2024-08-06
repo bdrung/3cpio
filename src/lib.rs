@@ -476,6 +476,10 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
     now: i64,
     user_group_cache: &mut UserGroupCache,
 ) -> Result<()> {
+    // Files can have the same mtime (especially when using SOURCE_DATE_EPOCH).
+    // Cache the time string of the last mtime.
+    let mut last_mtime = 0;
+    let mut time_string: String = "".into();
     loop {
         let header = match read_cpio_header(file) {
             Ok(header) => {
@@ -497,6 +501,10 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
             None => header.gid.to_string(),
         };
         let mode_string = header.mode_string();
+        if header.mtime != last_mtime || time_string.is_empty() {
+            last_mtime = header.mtime;
+            time_string = format_time(header.mtime, now)?;
+        };
 
         if header.mode & MODE_FILETYPE_MASK == FILETYPE_SYMLINK {
             let target = header.read_symlink_target(file)?;
@@ -508,7 +516,7 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
                 user,
                 group,
                 header.filesize,
-                format_time(header.mtime, now)?,
+                time_string,
                 header.filename,
                 target
             )?;
@@ -522,7 +530,7 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
                 user,
                 group,
                 header.filesize,
-                format_time(header.mtime, now)?,
+                time_string,
                 header.filename
             )?;
         };
