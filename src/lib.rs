@@ -659,13 +659,10 @@ fn write_file<R: Read + SeekForward>(
     // TODO: check overwriting existing files/hardlinks
     let written = std::io::copy(&mut reader, &mut file)?;
     if written != header.filesize.into() {
-        return Err(Error::new(
-            ErrorKind::Other,
-            format!(
-                "Wrong amound of bytes written to '{}': {} != {}.",
-                header.filename, written, header.filesize
-            ),
-        ));
+        return Err(Error::other(format!(
+            "Wrong amound of bytes written to '{}': {} != {}.",
+            header.filename, written, header.filesize
+        )));
     }
     let skip = align_to_4_bytes(header.filesize);
     cpio_file.seek_forward(skip.into())?;

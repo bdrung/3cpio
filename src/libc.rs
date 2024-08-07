@@ -1,5 +1,5 @@
 use std::ffi::{CStr, CString};
-use std::io::{Error, ErrorKind, Result};
+use std::io::{Error, Result};
 
 /// Get password file entry and return user name.
 ///
@@ -93,7 +93,7 @@ fn strftime(format: &[u8], tm: *mut libc::tm) -> Result<String> {
         )
     };
     if length == 0 {
-        return Err(Error::new(ErrorKind::Other, "strftime returned 0"));
+        return Err(Error::other("strftime returned 0"));
     }
     Ok(String::from_utf8_lossy(&s[..length]).to_string())
 }
