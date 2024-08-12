@@ -115,7 +115,7 @@ fn file_doesnt_exist() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
-    for compression in ["bzip2", "gzip", "lz4", "lzop", "xz", "zstd"] {
+    for compression in ["bzip2", "gzip", "lz4", "lzma", "lzop", "xz", "zstd"] {
         let mut cmd = get_command();
         cmd.arg("-t").arg(format!("tests/{}.cpio", compression));
 

@@ -415,6 +415,11 @@ fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Command>> {
             cmd.arg("-cd");
             cmd
         }
+        [0x5D, _, _, _] => {
+            let mut cmd = Command::new("lzma");
+            cmd.arg("-cd");
+            cmd
+        }
         // Full magic number for lzop: [0x89, 0x4C, 0x5A, 0x4F, 0x00, 0x0D, 0x0A, 0x1A, 0x0A]
         [0x89, 0x4C, 0x5A, 0x4F] => {
             let mut cmd = Command::new("lzop");

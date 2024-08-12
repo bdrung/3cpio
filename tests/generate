@@ -37,6 +37,9 @@ gzip -n -9 < "$input/shell.cpio" >> gzip.cpio
 cp single.cpio lz4.cpio
 lz4 -l -9 < "$input/shell.cpio" >> lz4.cpio
 
+cp single.cpio lzma.cpio
+lzma -9 < "$input/shell.cpio" >> lzma.cpio
+
 cp single.cpio lzop.cpio
 lzop -9 -c "$input/shell.cpio" >> lzop.cpio
 
