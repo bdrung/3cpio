@@ -436,7 +436,7 @@ fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Command>> {
             return Some(Err(Error::new(
                 ErrorKind::InvalidData,
                 format!(
-                    "Failed to determine magic number: 0x{:02x}{:02x}{:02x}{:02x} (big endian)",
+                    "Failed to determine CPIO or compression magic number: 0x{:02x}{:02x}{:02x}{:02x} (big endian)",
                     buffer[0], buffer[1], buffer[2], buffer[3]
                 ),
             )));
