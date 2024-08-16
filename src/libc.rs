@@ -61,10 +61,8 @@ pub fn getgrgid_name(gid: u32) -> Result<Option<String>> {
 
 pub fn set_modified(path: &str, mtime: i64) -> Result<()> {
     let p = CString::new(path)?;
-    let modified = libc::timespec {
-        tv_sec: mtime,
-        tv_nsec: 0,
-    };
+    let mut modified: libc::timespec = unsafe { std::mem::zeroed() };
+    modified.tv_sec = mtime;
     // times contains the access time followed by modfied time
     let times = [modified, modified];
     let rc = unsafe {
