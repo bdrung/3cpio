@@ -458,7 +458,17 @@ fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Command>> {
 
 fn decompress(command: &mut Command, file: File) -> Result<ChildStdout> {
     // TODO: Propper error message if spawn fails
-    let cmd = command.stdin(file).stdout(Stdio::piped()).spawn()?;
+    let cmd = command
+        .stdin(file)
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|e| match e.kind() {
+            ErrorKind::NotFound => Error::other(format!(
+                "Program '{}' not found in PATH.",
+                command.get_program().to_str().unwrap()
+            )),
+            _ => e,
+        })?;
     // TODO: Should unwrap be replaced by returning Result?
     Ok(cmd.stdout.unwrap())
 }
@@ -917,6 +927,18 @@ mod tests {
     #[test]
     fn test_align_to_4_bytes_is_aligned() {
         assert_eq!(align_to_4_bytes(32), 0);
+    }
+
+    #[test]
+    fn test_decompress_program_not_found() {
+        let file = File::open("tests/single.cpio").expect("test cpio should be present");
+        let mut cmd = Command::new("non-existing-program");
+        let got = decompress(&mut cmd, file).unwrap_err();
+        assert_eq!(got.kind(), ErrorKind::Other);
+        assert_eq!(
+            got.to_string(),
+            "Program 'non-existing-program' not found in PATH."
+        );
     }
 
     #[test]
