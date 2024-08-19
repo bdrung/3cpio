@@ -1,6 +1,20 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.3.2 (2024-08-19)
+------------------
+
+### What's new
+
+* Support lzma compression ([bug #8](https://github.com/bdrung/3cpio/issues/8))
+
+### Fixed
+
+* Avoid `timespec` struct literal
+  ([LP: #2076903](https://launchpad.net/bugs/2076903))
+* Include missing helper program name in error message
+  ([bug #4](https://github.com/bdrung/3cpio/issues/4))
+
 0.3.1 (2024-08-06)
 ------------------
 
