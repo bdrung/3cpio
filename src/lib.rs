@@ -188,6 +188,16 @@ impl Header {
         })
     }
 
+    fn read_only_filesize_and_filename<R: Read>(file: &mut R) -> Result<(u32, String)> {
+        let mut header = [0; CPIO_HEADER_LENGTH as usize];
+        file.read_exact(&mut header)?;
+        check_begins_with_cpio_magic_header(&header)?;
+        let filesize = hex_str_to_u32(&header[54..62])?;
+        let namesize = hex_str_to_u32(&header[94..102])?;
+        let filename = read_filename(file, namesize)?;
+        Ok((filesize, filename))
+    }
+
     fn read_symlink_target<R: Read>(&self, file: &mut R) -> Result<String> {
         let align = align_to_4_bytes(self.filesize);
         let mut target_bytes = vec![0u8; (self.filesize + align).try_into().unwrap()];
@@ -358,13 +368,7 @@ fn check_begins_with_cpio_magic_header(header: &[u8]) -> std::io::Result<()> {
 /// Read the next cpio object header, check the magic, skip the file data.
 /// Return the file name.
 fn read_filename_from_next_cpio_object<R: Read + SeekForward>(file: &mut R) -> Result<String> {
-    let mut header = [0; CPIO_HEADER_LENGTH as usize];
-    file.read_exact(&mut header)?;
-    check_begins_with_cpio_magic_header(&header)?;
-    let filesize = hex_str_to_u32(&header[54..62])?;
-    let namesize = hex_str_to_u32(&header[94..102])?;
-    let filename = read_filename(file, namesize)?;
-
+    let (filesize, filename) = Header::read_only_filesize_and_filename(file)?;
     let skip = filesize + align_to_4_bytes(filesize);
     file.seek_forward(skip.into())?;
     Ok(filename)
