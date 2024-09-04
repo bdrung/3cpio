@@ -79,6 +79,32 @@ struct Header {
 }
 
 impl Header {
+    #![allow(clippy::too_many_arguments)]
+    #[cfg(test)]
+    fn new(
+        ino: u32,
+        mode: u32,
+        uid: u32,
+        gid: u32,
+        nlink: u32,
+        mtime: u32,
+        filesize: u32,
+        filename: String,
+    ) -> Self {
+        Self {
+            ino,
+            mode,
+            uid,
+            gid,
+            nlink,
+            mtime,
+            filesize,
+            major: 0,
+            minor: 0,
+            filename,
+        }
+    }
+
     // Return major and minor combined as u64
     fn dev(&self) -> u64 {
         u64::from(self.major) << 32 | u64::from(self.minor)
@@ -1034,18 +1060,16 @@ mod tests {
     #[test]
     fn test_write_directory_with_setuid() {
         let mut mtimes = BTreeMap::new();
-        let header = Header {
-            ino: 1,
-            mode: 0o43_777,
-            uid: getuid(),
-            gid: getgid(),
-            nlink: 0,
-            mtime: 1720081471,
-            filesize: 0,
-            major: 0,
-            minor: 0,
-            filename: "./directory_with_setuid".into(),
-        };
+        let header = Header::new(
+            1,
+            0o43_777,
+            getuid(),
+            getgid(),
+            0,
+            1720081471,
+            0,
+            "./directory_with_setuid".into(),
+        );
         write_directory(&header, true, LOG_LEVEL_WARNING, &mut mtimes).unwrap();
 
         let attr = std::fs::metadata("directory_with_setuid").unwrap();
@@ -1063,18 +1087,16 @@ mod tests {
     #[test]
     fn test_write_file_with_setuid() {
         let mut seen_files = SeenFiles::new();
-        let header = Header {
-            ino: 1,
-            mode: 0o104_755,
-            uid: getuid(),
-            gid: getgid(),
-            nlink: 0,
-            mtime: 1720081471,
-            filesize: 9,
-            major: 0,
-            minor: 0,
-            filename: "./file_with_setuid".into(),
-        };
+        let header = Header::new(
+            1,
+            0o104_755,
+            getuid(),
+            getgid(),
+            0,
+            1720081471,
+            9,
+            "./file_with_setuid".into(),
+        );
         let cpio = b"!/bin/sh\n\0\0\0";
         write_file(
             &mut cpio.as_ref(),
@@ -1097,18 +1119,16 @@ mod tests {
 
     #[test]
     fn test_write_symbolic_link() {
-        let header = Header {
-            ino: 1,
-            mode: 0o120_777,
-            uid: getuid(),
-            gid: getgid(),
-            nlink: 0,
-            mtime: 1721427072,
-            filesize: 12,
-            major: 0,
-            minor: 0,
-            filename: "./dead_symlink".into(),
-        };
+        let header = Header::new(
+            1,
+            0o120_777,
+            getuid(),
+            getgid(),
+            0,
+            1721427072,
+            12,
+            "./dead_symlink".into(),
+        );
         let cpio = b"/nonexistent";
         write_symbolic_link(&mut cpio.as_ref(), &header, true, LOG_LEVEL_WARNING).unwrap();
 
