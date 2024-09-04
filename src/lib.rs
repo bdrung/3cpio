@@ -140,6 +140,28 @@ impl Header {
         seen_files.insert(self.ino_and_dev(), self.filename.clone());
     }
 
+    fn read<R: Read>(file: &mut R) -> Result<Self> {
+        let mut buffer = [0; CPIO_HEADER_LENGTH as usize];
+        file.read_exact(&mut buffer)?;
+        check_begins_with_cpio_magic_header(&buffer)?;
+        let namesize = hex_str_to_u32(&buffer[94..102])?;
+        let filename = read_filename(file, namesize)?;
+        Ok(Self {
+            ino: hex_str_to_u32(&buffer[6..14])?,
+            mode: hex_str_to_u32(&buffer[14..22])?,
+            uid: hex_str_to_u32(&buffer[22..30])?,
+            gid: hex_str_to_u32(&buffer[30..38])?,
+            nlink: hex_str_to_u32(&buffer[38..46])?,
+            mtime: hex_str_to_u32(&buffer[46..54])?,
+            filesize: hex_str_to_u32(&buffer[54..62])?,
+            major: hex_str_to_u32(&buffer[62..70])?,
+            minor: hex_str_to_u32(&buffer[70..78])?,
+            //rmajor: hex_str_to_u32(&buffer[78..86])?,
+            //rminor: hex_str_to_u32(&buffer[86..94])?,
+            filename,
+        })
+    }
+
     fn read_symlink_target<R: Read>(&self, file: &mut R) -> Result<String> {
         let align = align_to_4_bytes(self.filesize);
         let mut target_bytes = vec![0u8; (self.filesize + align).try_into().unwrap()];
@@ -298,28 +320,6 @@ fn check_begins_with_cpio_magic_header(header: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
-fn read_cpio_header<R: Read>(file: &mut R) -> std::io::Result<Header> {
-    let mut buffer = [0; CPIO_HEADER_LENGTH as usize];
-    file.read_exact(&mut buffer)?;
-    check_begins_with_cpio_magic_header(&buffer)?;
-    let namesize = hex_str_to_u32(&buffer[94..102])?;
-    let filename = read_filename(file, namesize)?;
-    Ok(Header {
-        ino: hex_str_to_u32(&buffer[6..14])?,
-        mode: hex_str_to_u32(&buffer[14..22])?,
-        uid: hex_str_to_u32(&buffer[22..30])?,
-        gid: hex_str_to_u32(&buffer[30..38])?,
-        nlink: hex_str_to_u32(&buffer[38..46])?,
-        mtime: hex_str_to_u32(&buffer[46..54])?,
-        filesize: hex_str_to_u32(&buffer[54..62])?,
-        major: hex_str_to_u32(&buffer[62..70])?,
-        minor: hex_str_to_u32(&buffer[70..78])?,
-        //rmajor: hex_str_to_u32(&buffer[78..86])?,
-        //rminor: hex_str_to_u32(&buffer[86..94])?,
-        filename,
-    })
-}
-
 /// Read only the file name from the next cpio object.
 ///
 /// Read the next cpio object header, check the magic, skip the file data.
@@ -450,7 +450,7 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
     let mut last_mtime = 0;
     let mut time_string: String = "".into();
     loop {
-        let header = match read_cpio_header(file) {
+        let header = match Header::read(file) {
             Ok(header) => {
                 if header.filename == "TRAILER!!!" {
                     break;
@@ -694,7 +694,7 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
 ) -> Result<()> {
     let mut extractor = Extractor::new();
     loop {
-        let header = match read_cpio_header(file) {
+        let header = match Header::read(file) {
             Ok(header) => {
                 if header.filename == "TRAILER!!!" {
                     break;
@@ -996,12 +996,12 @@ mod tests {
     }
 
     #[test]
-    fn test_read_cpio_header() {
+    fn test_header_read() {
         // Wrapped before mtime and filename
         let cpio_data = b"07070100000002000081B4000003E8000007D000000001\
             661BE5C600000008000000000000000000000000000000000000000A00000000\
             path/file\0content\0";
-        let header = read_cpio_header(&mut cpio_data.as_ref()).unwrap();
+        let header = Header::read(&mut cpio_data.as_ref()).unwrap();
         assert_eq!(
             header,
             Header {
@@ -1020,10 +1020,10 @@ mod tests {
     }
 
     #[test]
-    fn test_read_cpio_header_invalid_magic_number() {
+    fn test_header_read_invalid_magic_number() {
         let invalid_data = b"abc\tefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\
             abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        let got = read_cpio_header(&mut invalid_data.as_ref()).unwrap_err();
+        let got = Header::read(&mut invalid_data.as_ref()).unwrap_err();
         assert_eq!(got.kind(), ErrorKind::InvalidData);
         assert_eq!(
             got.to_string(),
