@@ -319,6 +319,76 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
     Ok(())
 }
 
+fn read_cpio_and_print_longest_format<R: Read + SeekForward, W: Write>(
+    file: &mut R,
+    out: &mut W,
+    now: i64,
+    user_group_cache: &mut UserGroupCache,
+) -> Result<()> {
+    // Files can have the same mtime (especially when using SOURCE_DATE_EPOCH).
+    // Cache the time string of the last mtime.
+    let mut last_mtime = 0;
+    let mut time_string: String = "".into();
+    loop {
+        let header = match Header::read(file) {
+            Ok(header) => {
+                if header.filename == "TRAILER!!!" {
+                    break;
+                } else {
+                    header
+                }
+            }
+            Err(e) => return Err(e),
+        };
+
+        let user = match user_group_cache.get_user(header.uid)? {
+            Some(name) => name,
+            None => header.uid.to_string(),
+        };
+        let group = match user_group_cache.get_group(header.gid)? {
+            Some(name) => name,
+            None => header.gid.to_string(),
+        };
+        let mode_string = header.mode_string();
+        if header.mtime != last_mtime || time_string.is_empty() {
+            last_mtime = header.mtime;
+            time_string = format_time(header.mtime, now)?;
+        };
+
+        if header.mode & MODE_FILETYPE_MASK == FILETYPE_SYMLINK {
+            let target = header.read_symlink_target(file)?;
+            writeln!(
+                out,
+                "{:>4} {} {:>3} {:<8} {:<8} {:>8} {} {} -> {}",
+                header.ino,
+                std::str::from_utf8(&mode_string).unwrap(),
+                header.nlink,
+                user,
+                group,
+                header.filesize,
+                time_string,
+                header.filename,
+                target
+            )?;
+        } else {
+            header.skip_file_content(file)?;
+            writeln!(
+                out,
+                "{:>4} {} {:>3} {:<8} {:<8} {:>8} {} {}",
+                header.ino,
+                std::str::from_utf8(&mode_string).unwrap(),
+                header.nlink,
+                user,
+                group,
+                header.filesize,
+                time_string,
+                header.filename
+            )?;
+        };
+    }
+    Ok(())
+}
+
 fn create_dir_ignore_existing<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
     if let Err(e) = create_dir(&path) {
         if e.kind() != ErrorKind::AlreadyExists {
@@ -628,14 +698,23 @@ pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W, log_level: u32) 
             Some(x) => x?,
         };
         if command.get_program() == "cpio" {
-            if log_level >= LOG_LEVEL_INFO {
+            if log_level >= LOG_LEVEL_DEBUG {
+                read_cpio_and_print_longest_format(&mut file, out, now, &mut user_group_cache)?;
+            } else if log_level >= LOG_LEVEL_INFO {
                 read_cpio_and_print_long_format(&mut file, out, now, &mut user_group_cache)?;
             } else {
                 read_cpio_and_print_filenames(&mut file, out)?;
             }
         } else {
             let mut decompressed = decompress(&mut command, file)?;
-            if log_level >= LOG_LEVEL_INFO {
+            if log_level >= LOG_LEVEL_DEBUG {
+                read_cpio_and_print_longest_format(
+                    &mut decompressed,
+                    out,
+                    now,
+                    &mut user_group_cache,
+                )?;
+            } else if log_level >= LOG_LEVEL_INFO {
                 read_cpio_and_print_long_format(
                     &mut decompressed,
                     out,
