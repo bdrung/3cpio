@@ -10,12 +10,13 @@ use std::process::ExitCode;
 use lexopt::prelude::*;
 
 use threecpio::{
-    examine_cpio_content, extract_cpio_archive, list_cpio_content, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO,
-    LOG_LEVEL_WARNING,
+    create_cpio_archive, examine_cpio_content, extract_cpio_archive, list_cpio_content,
+    LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING,
 };
 
 #[derive(Debug)]
 struct Args {
+    create: bool,
     directory: String,
     examine: bool,
     extract: bool,
@@ -31,11 +32,13 @@ fn print_help() {
     let executable = std::env::args().next().unwrap();
     println!(
         "Usage:
+    {executable} {{-c|--create}} [FILE]
     {executable} {{-e|--examine}} FILE
     {executable} {{-t|--list}} FILE
     {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--force] FILE
 
 Optional arguments:
+  -c, --create   Create a new cpio archive.
   -e, --examine  List the offsets of the cpio archives and their compression.
   -t, --list     List the contents of the cpio archives.
   -x, --extract  Extract cpio archives.
@@ -60,6 +63,7 @@ fn print_version() {
 }
 
 fn parse_args() -> Result<Args, lexopt::Error> {
+    let mut create = 0;
     let mut examine = 0;
     let mut extract = 0;
     let mut force = false;
@@ -72,6 +76,9 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     let mut parser = lexopt::Parser::from_env();
     while let Some(arg) = parser.next()? {
         match arg {
+            Short('c') | Long("create") => {
+                create = 1;
+            }
             Short('C') | Long("directory") => {
                 directory = parser.value()?.string()?;
             }
@@ -116,8 +123,8 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         }
     }
 
-    if examine + extract + list != 1 {
-        return Err("Either --examine, --extract or --list must be specified!".into());
+    if create + examine + extract + list != 1 {
+        return Err("Either --create, --examine, --extract or --list must be specified!".into());
     }
 
     if let Some(ref s) = subdir {
@@ -127,6 +134,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     }
 
     Ok(Args {
+        create: create == 1,
         directory,
         examine: examine == 1,
         extract: extract == 1,
@@ -190,18 +198,39 @@ fn main() -> ExitCode {
         }
     };
 
-    let file = match File::open(&args.file) {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!(
-                "{}: Error: Failed to open '{}': {}",
-                executable, args.file, e
-            );
-            return ExitCode::FAILURE;
+    let file = if args.create {
+        match File::create(&args.file) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!(
+                    "{}: Error: Failed to create '{}': {}",
+                    executable, args.file, e
+                );
+                return ExitCode::FAILURE;
+            }
+        }
+    } else {
+        match File::open(&args.file) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!(
+                    "{}: Error: Failed to open '{}': {}",
+                    executable, args.file, e
+                );
+                return ExitCode::FAILURE;
+            }
         }
     };
 
-    if args.extract {
+    if args.create {
+        if let Err(e) = set_current_dir(&args.directory) {
+            eprintln!(
+                "{}: Error: Failed to change directory to '{}': {}",
+                executable, args.directory, e
+            );
+            return ExitCode::FAILURE;
+        }
+    } else if args.extract {
         if let Err(e) = create_and_set_current_dir(&args.directory, args.force) {
             eprintln!("{}: Error: {}", executable, e);
             return ExitCode::FAILURE;
@@ -209,7 +238,9 @@ fn main() -> ExitCode {
     }
 
     let mut stdout = std::io::stdout();
-    let (operation, result) = if args.examine {
+    let (operation, result) = if args.create {
+        ("create", create_cpio_archive(file, args.log_level))
+    } else if args.examine {
         ("examine", examine_cpio_content(file, &mut stdout))
     } else if args.extract {
         (
