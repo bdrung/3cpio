@@ -18,12 +18,13 @@ use std::process::Stdio;
 use std::time::SystemTime;
 
 use crate::libc::{set_modified, strftime_local};
+use crate::seek_forward::SeekForward;
 
 mod libc;
+mod seek_forward;
 
 const CPIO_HEADER_LENGTH: u32 = 110;
 const CPIO_MAGIC_NUMBER: [u8; 6] = *b"070701";
-const PIPE_SIZE: usize = 65536;
 
 const MODE_PERMISSION_MASK: u32 = 0o007_777;
 const MODE_FILETYPE_MASK: u32 = 0o770_000;
@@ -38,53 +39,6 @@ const FILETYPE_SOCKET: u32 = 0o140_000;
 pub const LOG_LEVEL_WARNING: u32 = 5;
 pub const LOG_LEVEL_INFO: u32 = 7;
 pub const LOG_LEVEL_DEBUG: u32 = 8;
-
-pub trait SeekForward {
-    /// Seek forward to an offset, in bytes, in a stream.
-    ///
-    /// A seek beyond the end of a stream is allowed, but behavior is defined
-    /// by the implementation.
-    ///
-    /// # Errors
-    ///
-    /// Seeking can fail, for example because it might involve flushing a buffer.
-    fn seek_forward(&mut self, offset: u64) -> Result<()>;
-}
-
-impl SeekForward for File {
-    fn seek_forward(&mut self, offset: u64) -> Result<()> {
-        self.seek(SeekFrom::Current(offset.try_into().unwrap()))?;
-        Ok(())
-    }
-}
-
-impl SeekForward for ChildStdout {
-    fn seek_forward(&mut self, offset: u64) -> Result<()> {
-        let mut seek_reader = self.take(offset);
-        let mut remaining: usize = offset.try_into().unwrap();
-        let mut buffer = [0; PIPE_SIZE];
-        while remaining > 0 {
-            let read = seek_reader.read(&mut buffer)?;
-            remaining -= read;
-        }
-        Ok(())
-    }
-}
-
-impl SeekForward for &[u8] {
-    fn seek_forward(&mut self, offset: u64) -> Result<()> {
-        let mut seek_reader = std::io::Read::take(self, offset);
-        let mut buffer = Vec::new();
-        let read = seek_reader.read_to_end(&mut buffer)?;
-        if read < offset.try_into().unwrap() {
-            return Err(Error::new(
-                ErrorKind::UnexpectedEof,
-                format!("read only {} bytes, but {} wanted", read, offset),
-            ));
-        }
-        Ok(())
-    }
-}
 
 struct CpioFilenameReader<'a, R: Read + SeekForward> {
     file: &'a mut R,
