@@ -177,6 +177,13 @@ impl Header {
         file.seek_forward(skip.into())?;
         Ok(())
     }
+
+    fn try_get_hard_link_target<'a>(&self, seen_files: &'a SeenFiles) -> Option<&'a String> {
+        if self.nlink <= 1 {
+            return None;
+        }
+        seen_files.get(&self.ino_and_dev())
+    }
 }
 
 struct UserGroupCache {
@@ -562,13 +569,6 @@ fn from_mtime(mtime: u32) -> SystemTime {
     std::time::UNIX_EPOCH + std::time::Duration::from_secs(mtime.into())
 }
 
-fn try_get_hard_link_target<'a>(header: &Header, seen_files: &'a SeenFiles) -> Option<&'a String> {
-    if header.nlink <= 1 {
-        return None;
-    }
-    seen_files.get(&header.ino_and_dev())
-}
-
 fn write_file<R: Read + SeekForward>(
     cpio_file: &mut R,
     header: &Header,
@@ -577,7 +577,7 @@ fn write_file<R: Read + SeekForward>(
     log_level: u32,
 ) -> Result<()> {
     let mut file;
-    if let Some(target) = try_get_hard_link_target(header, seen_files) {
+    if let Some(target) = header.try_get_hard_link_target(seen_files) {
         if log_level >= LOG_LEVEL_DEBUG {
             writeln!(
                 std::io::stderr(),
