@@ -19,7 +19,7 @@ use std::time::SystemTime;
 use crate::header::*;
 use crate::libc::{set_modified, strftime_local};
 use crate::seek_forward::SeekForward;
-use crate::writer::CpioWriter;
+use crate::writer::Writer;
 
 mod header;
 mod libc;
@@ -664,7 +664,7 @@ impl<'a, R: BufRead> Iterator for PathReader<'a, R> {
     }
 }
 pub fn create_cpio_archive(mut file: File, log_level: u32) -> Result<()> {
-    let mut cpio_writer = CpioWriter::new(&mut file);
+    let mut cpio_writer = Writer::new(&mut file);
     //let mut reader = PathReader::from_stdin();
     let stdin = std::io::stdin();
     let mut buf_reader = std::io::BufReader::new(stdin);

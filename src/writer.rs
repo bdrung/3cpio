@@ -21,13 +21,13 @@ impl HardlinkState {
     }
 }
 
-pub struct CpioWriter<'a, W: Write> {
+pub struct Writer<'a, W: Write> {
     file: &'a mut W,
     next_ino: u32,
     hardlinks: HashMap<u64, HardlinkState>,
 }
 
-impl<'a, W: Write> CpioWriter<'a, W> {
+impl<'a, W: Write> Writer<'a, W> {
     pub fn new(file: &'a mut W) -> Self {
         Self {
             file,
