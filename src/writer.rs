@@ -198,4 +198,34 @@ mod tests {
     fn test_sanitize_path_root() {
         assert_eq!(sanitize_path(&"/".into()), ".");
     }
+
+    #[test]
+    fn test_writer_add_directory() {
+        let path = "./tests";
+        let mut output = Vec::new();
+        let mut cpio_writer = Writer::new(&mut output);
+        cpio_writer.next_ino = 37;
+
+        cpio_writer.add_path(path.into(), LOG_LEVEL_DEBUG).unwrap();
+
+        let stat = symlink_metadata(path).unwrap();
+        let header = Header::from_metadata(&stat, 37, "tests".into()).unwrap();
+        let mut expected_header = Vec::new();
+        header.write(&mut expected_header).unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            String::from_utf8(expected_header).unwrap()
+        );
+
+        //let header = Header::from_metadata(&stat, 37, filename.into()).unwrap();
+        /*        assert_eq!(header.ino, 37);
+        assert_eq!(header.mode & MODE_FILETYPE_MASK, FILETYPE_DIRECTORY);
+        assert_eq!(header.mode, stat.mode());
+        assert_eq!(header.nlink, 2);
+        assert_eq!(header.mtime.try_into(), Ok(stat.mtime()));
+        assert_eq!(header.filesize, 0);
+        assert_eq!(header.major, 0);
+        assert_eq!(header.minor, 0);
+        assert_eq!(header.filename, filename);*/
+    }
 }
