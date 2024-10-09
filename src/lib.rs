@@ -302,6 +302,21 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
                     target
                 )?;
             }
+            FILETYPE_BLOCK_DEVICE | FILETYPE_CHARACTER_DEVICE => {
+                header.skip_file_content(file)?;
+                writeln!(
+                    out,
+                    "{} {:>3} {:<8} {:<8} {:>3}, {:>3} {} {}",
+                    std::str::from_utf8(&mode_string).unwrap(),
+                    header.nlink,
+                    user,
+                    group,
+                    header.rmajor,
+                    header.rminor,
+                    time_string,
+                    header.filename
+                )?;
+            }
             _ => {
                 header.skip_file_content(file)?;
                 writeln!(
@@ -700,6 +715,32 @@ mod tests {
         assert_eq!(
             got.to_string(),
             "Program 'non-existing-program' not found in PATH."
+        );
+    }
+
+    #[test]
+    fn test_read_cpio_and_print_long_format_character_device() {
+        // Wrapped before mtime and filename
+        let cpio_data = b"07070100000003000021A4000000000000\
+        00000000000167055BC800000000000000000000000000000005000000010000\
+        000C00000000dev/console\0\0\0\
+        0707010000000000000000000000000000000000000001\
+        0000000000000000000000000000000000000000000000000000000B00000000\
+        TRAILER!!!\0\0\0\0";
+        let mut output = Vec::new();
+        let mut user_group_cache = UserGroupCache::new();
+        env::set_var("TZ", "UTC");
+        unsafe { tzset() };
+        read_cpio_and_print_long_format(
+            &mut cpio_data.as_ref(),
+            &mut output,
+            1728486311,
+            &mut user_group_cache,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "crw-r--r--   1 root     root       5,   1 Oct  8 16:20 dev/console\n"
         );
     }
 
