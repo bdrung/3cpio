@@ -32,9 +32,8 @@ pub struct Header {
     pub filesize: u32,
     major: u32,
     minor: u32,
-    // unused
-    //rmajor: u32,
-    //rminor: u32,
+    pub rmajor: u32,
+    pub rminor: u32,
     pub filename: String,
 }
 
@@ -61,6 +60,8 @@ impl Header {
             filesize,
             major: 0,
             minor: 0,
+            rmajor: 0,
+            rminor: 0,
             filename,
         }
     }
@@ -142,8 +143,8 @@ impl Header {
             filesize: hex_str_to_u32(&buffer[54..62])?,
             major: hex_str_to_u32(&buffer[62..70])?,
             minor: hex_str_to_u32(&buffer[70..78])?,
-            //rmajor: hex_str_to_u32(&buffer[78..86])?,
-            //rminor: hex_str_to_u32(&buffer[86..94])?,
+            rmajor: hex_str_to_u32(&buffer[78..86])?,
+            rminor: hex_str_to_u32(&buffer[86..94])?,
             filename,
         })
     }
@@ -261,6 +262,8 @@ mod tests {
                 filesize: 8,
                 major: 0,
                 minor: 0,
+                rmajor: 0,
+                rminor: 0,
                 filename: "path/file".into()
             }
         )
