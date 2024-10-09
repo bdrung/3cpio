@@ -169,6 +169,9 @@ impl Header {
     }
 
     pub fn skip_file_content<R: SeekForward>(&self, file: &mut R) -> Result<()> {
+        if self.filesize == 0 {
+            return Ok(());
+        };
         let skip = self.filesize + align_to_4_bytes(self.filesize);
         file.seek_forward(skip.into())?;
         Ok(())
