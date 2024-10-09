@@ -286,33 +286,36 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
             time_string = format_time(header.mtime, now)?;
         };
 
-        if header.mode & MODE_FILETYPE_MASK == FILETYPE_SYMLINK {
-            let target = header.read_symlink_target(file)?;
-            writeln!(
-                out,
-                "{} {:>3} {:<8} {:<8} {:>8} {} {} -> {}",
-                std::str::from_utf8(&mode_string).unwrap(),
-                header.nlink,
-                user,
-                group,
-                header.filesize,
-                time_string,
-                header.filename,
-                target
-            )?;
-        } else {
-            header.skip_file_content(file)?;
-            writeln!(
-                out,
-                "{} {:>3} {:<8} {:<8} {:>8} {} {}",
-                std::str::from_utf8(&mode_string).unwrap(),
-                header.nlink,
-                user,
-                group,
-                header.filesize,
-                time_string,
-                header.filename
-            )?;
+        match header.mode & MODE_FILETYPE_MASK {
+            FILETYPE_SYMLINK => {
+                let target = header.read_symlink_target(file)?;
+                writeln!(
+                    out,
+                    "{} {:>3} {:<8} {:<8} {:>8} {} {} -> {}",
+                    std::str::from_utf8(&mode_string).unwrap(),
+                    header.nlink,
+                    user,
+                    group,
+                    header.filesize,
+                    time_string,
+                    header.filename,
+                    target
+                )?;
+            }
+            _ => {
+                header.skip_file_content(file)?;
+                writeln!(
+                    out,
+                    "{} {:>3} {:<8} {:<8} {:>8} {} {}",
+                    std::str::from_utf8(&mode_string).unwrap(),
+                    header.nlink,
+                    user,
+                    group,
+                    header.filesize,
+                    time_string,
+                    header.filename
+                )?;
+            }
         };
     }
     Ok(())
