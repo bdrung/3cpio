@@ -671,10 +671,9 @@ pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W, log_level: u32) 
 #[cfg(test)]
 mod tests {
     use std::env;
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
     use super::*;
-    use std::os::unix::fs::MetadataExt;
 
     fn getgid() -> u32 {
         unsafe { ::libc::getgid() }
