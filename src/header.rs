@@ -68,7 +68,7 @@ impl Header {
 
     // Return major and minor combined as u64
     fn dev(&self) -> u64 {
-        u64::from(self.major) << 32 | u64::from(self.minor)
+        (u64::from(self.major) << 32) | u64::from(self.minor)
     }
 
     pub fn mode_perm(&self) -> u32 {
@@ -120,7 +120,7 @@ impl Header {
     }
 
     fn ino_and_dev(&self) -> u128 {
-        u128::from(self.ino) << 64 | u128::from(self.dev())
+        (u128::from(self.ino) << 64) | u128::from(self.dev())
     }
 
     pub fn mark_seen(&self, seen_files: &mut SeenFiles) {
