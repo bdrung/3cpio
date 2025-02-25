@@ -32,7 +32,7 @@ struct CpioFilenameReader<'a, R: Read + SeekForward> {
     file: &'a mut R,
 }
 
-impl<'a, R: Read + SeekForward> Iterator for CpioFilenameReader<'a, R> {
+impl<R: Read + SeekForward> Iterator for CpioFilenameReader<'_, R> {
     type Item = Result<String>;
 
     fn next(&mut self) -> Option<Self::Item> {
