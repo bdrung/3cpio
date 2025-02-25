@@ -17,7 +17,7 @@ use std::process::Stdio;
 use std::time::SystemTime;
 
 use crate::header::*;
-use crate::libc::{set_modified, strftime_local};
+use crate::libc::{mknod, set_modified, strftime_local};
 use crate::seek_forward::SeekForward;
 
 mod header;
@@ -350,6 +350,47 @@ fn create_dir_ignore_existing<P: AsRef<std::path::Path>>(path: P) -> Result<()> 
     Ok(())
 }
 
+fn write_character_device(
+    header: &Header,
+    preserve_permissions: bool,
+    log_level: u32,
+) -> Result<()> {
+    if header.filesize != 0 {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!(
+                "Invalid size for character device '{}': {} bytes instead of 0.",
+                header.filename, header.filesize
+            ),
+        ));
+    };
+    if log_level >= LOG_LEVEL_DEBUG {
+        writeln!(
+            std::io::stderr(),
+            "Creating character device '{}' with mode {:o}",
+            header.filename,
+            header.mode_perm(),
+        )?;
+    };
+    if let Err(e) = mknod(&header.filename, header.mode, header.rmajor, header.rminor) {
+        match e.kind() {
+            ErrorKind::AlreadyExists => {
+                remove_file(&header.filename)?;
+                mknod(&header.filename, header.mode, header.rmajor, header.rminor)?;
+            }
+            _ => {
+                return Err(e);
+            }
+        }
+    };
+    if preserve_permissions {
+        lchown(&header.filename, Some(header.uid), Some(header.gid))?;
+    };
+    set_permissions(&header.filename, header.permission())?;
+    set_modified(&header.filename, header.mtime.into())?;
+    Ok(())
+}
+
 fn write_directory(
     header: &Header,
     preserve_permissions: bool,
@@ -534,6 +575,9 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
         }
 
         match header.mode & MODE_FILETYPE_MASK {
+            FILETYPE_CHARACTER_DEVICE => {
+                write_character_device(&header, preserve_permissions, log_level)?
+            }
             FILETYPE_DIRECTORY => write_directory(
                 &header,
                 preserve_permissions,
@@ -550,7 +594,7 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
             FILETYPE_SYMLINK => {
                 write_symbolic_link(file, &header, preserve_permissions, log_level)?
             }
-            FILETYPE_FIFO | FILETYPE_CHARACTER_DEVICE | FILETYPE_BLOCK_DEVICE | FILETYPE_SOCKET => {
+            FILETYPE_FIFO | FILETYPE_BLOCK_DEVICE | FILETYPE_SOCKET => {
                 unimplemented!(
                     "Mode {:o} (file {}) not implemented. Please open a bug report requesting support for this type.",
                     header.mode, header.filename
@@ -671,9 +715,10 @@ pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W, log_level: u32) 
 #[cfg(test)]
 mod tests {
     use std::env;
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 
     use super::*;
+    use crate::libc::{major, minor};
 
     fn getgid() -> u32 {
         unsafe { ::libc::getgid() }
@@ -821,6 +866,29 @@ mod tests {
             String::from_utf8(output).unwrap(),
             "lrwxrwxrwx   1 root     root            7 Mar 20  2022 bin -> usr/bin\n"
         );
+    }
+
+    #[test]
+    fn test_write_character_device() {
+        if getuid() != 0 {
+            // This test needs to run as root.
+            return;
+        }
+        let mut header = Header::new(1, 0o20_644, 0, 0, 0, 1740402179, 0, "./null".into());
+        header.rmajor = 1;
+        header.rminor = 3;
+        write_character_device(&header, true, LOG_LEVEL_WARNING).unwrap();
+
+        let attr = std::fs::metadata("null").unwrap();
+        assert_eq!(attr.len(), header.filesize.into());
+        assert!(attr.file_type().is_char_device());
+        assert_eq!(attr.modified().unwrap(), from_mtime(header.mtime));
+        assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
+        assert_eq!(attr.uid(), header.uid);
+        assert_eq!(attr.gid(), header.gid);
+        assert_eq!(major(attr.rdev()), header.rmajor);
+        assert_eq!(minor(attr.rdev()), header.rminor);
+        std::fs::remove_file("null").unwrap();
     }
 
     #[test]

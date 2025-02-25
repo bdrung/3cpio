@@ -59,6 +59,25 @@ pub fn getgrgid_name(gid: u32) -> Result<Option<String>> {
     Ok(Some(name.to_string_lossy().to_string()))
 }
 
+#[cfg(test)]
+pub fn major(dev: u64) -> u32 {
+    unsafe { libc::major(dev) }
+}
+
+#[cfg(test)]
+pub fn minor(dev: u64) -> u32 {
+    unsafe { libc::minor(dev) }
+}
+
+pub fn mknod(pathname: &str, mode: libc::mode_t, major: u32, minor: u32) -> Result<()> {
+    let p = CString::new(pathname)?;
+    let rc = unsafe { libc::mknod(p.as_ptr(), mode, libc::makedev(major, minor)) };
+    if rc != 0 {
+        return Err(Error::last_os_error());
+    };
+    Ok(())
+}
+
 pub fn set_modified(path: &str, mtime: i64) -> Result<()> {
     let p = CString::new(path)?;
     let mut modified: libc::timespec = unsafe { std::mem::zeroed() };
