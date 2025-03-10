@@ -16,7 +16,7 @@ checksum = "875b3680cb2f8f71bdcf9a30f38d48282f5d3c95cbf9b3fa57269bb5d5c06828"
 
 [[package]]
 name = "threecpio"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "lexopt",
  "libc",

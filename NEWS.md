@@ -1,6 +1,17 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.4.0 (2025-03-11)
+------------------
+
+### What's new
+
+* add support for extracting character devices
+
+### Fixed
+
+* print major/minor of character devices in long format
+
 0.3.2 (2024-08-19)
 ------------------
 
