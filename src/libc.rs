@@ -61,12 +61,12 @@ pub fn getgrgid_name(gid: u32) -> Result<Option<String>> {
 
 #[cfg(test)]
 pub fn major(dev: u64) -> u32 {
-    unsafe { libc::major(dev) }
+    libc::major(dev)
 }
 
 #[cfg(test)]
 pub fn minor(dev: u64) -> u32 {
-    unsafe { libc::minor(dev) }
+    libc::minor(dev)
 }
 
 pub fn mknod(pathname: &str, mode: libc::mode_t, major: u32, minor: u32) -> Result<()> {
