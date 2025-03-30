@@ -623,6 +623,29 @@ fn seek_to_cpio_end(file: &mut File) -> Result<()> {
     Ok(())
 }
 
+pub fn get_cpio_archive_count(file: &mut File) -> Result<u32> {
+    let mut count = 0;
+    loop {
+        let command = match read_magic_header(file) {
+            None => return Ok(count),
+            Some(x) => x?,
+        };
+        count += 1;
+        if command.get_program() == "cpio" {
+            seek_to_cpio_end(file)?;
+        } else {
+            break;
+        }
+    }
+    Ok(count)
+}
+
+pub fn print_cpio_archive_count<W: Write>(mut file: File, out: &mut W) -> Result<()> {
+    let count = get_cpio_archive_count(&mut file)?;
+    writeln!(out, "{}", count)?;
+    Ok(())
+}
+
 pub fn examine_cpio_content<W: Write>(mut file: File, out: &mut W) -> Result<()> {
     loop {
         let command = match read_magic_header(&mut file) {
@@ -760,6 +783,26 @@ mod tests {
             got.to_string(),
             "Program 'non-existing-program' not found in PATH."
         );
+    }
+
+    #[test]
+    fn test_get_cpio_archive_count_single() {
+        let mut file = File::open("tests/single.cpio").expect("test cpio should be present");
+        let count = get_cpio_archive_count(&mut file).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_print_cpio_archive_count() {
+        let mut file = File::open("tests/zstd.cpio").expect("test cpio should be present");
+        let mut output = Vec::new();
+
+        let count = get_cpio_archive_count(&mut file).unwrap();
+        assert_eq!(count, 2);
+
+        file.seek(SeekFrom::Start(0)).unwrap();
+        print_cpio_archive_count(file, &mut output).unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), "2\n");
     }
 
     #[test]

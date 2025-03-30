@@ -79,6 +79,15 @@ impl OutputContainsAssertion for Output {
 }
 
 #[test]
+fn count_cpio_archives() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("--count").arg("tests/zstd.cpio");
+
+    cmd.output()?.assert_success().assert_stdout("2\n");
+    Ok(())
+}
+
+#[test]
 fn examine_compressed_cpio() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzop", "xz", "zstd"] {
         let mut cmd = get_command();

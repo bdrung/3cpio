@@ -19,6 +19,13 @@ allowed to start with numbers.
 Usage examples
 --------------
 
+List the number of cpio archives that an initramfs file contains:
+
+```
+$ 3cpio --count /boot/initrd.img
+4
+```
+
 Examine the content of the initramfs cpio on an Ubuntu 24.04 system:
 
 ```
