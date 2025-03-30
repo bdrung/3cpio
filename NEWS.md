@@ -1,6 +1,13 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.5.0 (2025-03-30)
+------------------
+
+### What's new
+
+* add `--count` parameter
+
 0.4.0 (2025-03-11)
 ------------------
 
