@@ -34,7 +34,7 @@ fn print_help() {
         "Usage:
     {executable} --count FILE
     {executable} {{-e|--examine}} FILE
-    {executable} {{-t|--list}} FILE
+    {executable} {{-t|--list}} [-v] FILE
     {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--force] FILE
 
 Optional arguments:
