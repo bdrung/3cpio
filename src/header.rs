@@ -40,7 +40,7 @@ pub struct Header {
 impl Header {
     #![allow(clippy::too_many_arguments)]
     #[cfg(test)]
-    pub fn new(
+    pub fn new<S>(
         ino: u32,
         mode: u32,
         uid: u32,
@@ -48,8 +48,11 @@ impl Header {
         nlink: u32,
         mtime: u32,
         filesize: u32,
-        filename: String,
-    ) -> Self {
+        filename: S,
+    ) -> Self
+    where
+        S: Into<String>,
+    {
         Self {
             ino,
             mode,
@@ -62,7 +65,7 @@ impl Header {
             minor: 0,
             rmajor: 0,
             rminor: 0,
-            filename,
+            filename: filename.into(),
         }
     }
 

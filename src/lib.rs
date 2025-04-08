@@ -917,7 +917,7 @@ mod tests {
             // This test needs to run as root.
             return;
         }
-        let mut header = Header::new(1, 0o20_644, 0, 0, 0, 1740402179, 0, "./null".into());
+        let mut header = Header::new(1, 0o20_644, 0, 0, 0, 1740402179, 0, "./null");
         header.rmajor = 1;
         header.rminor = 3;
         write_character_device(&header, true, LOG_LEVEL_WARNING).unwrap();
@@ -945,7 +945,7 @@ mod tests {
             0,
             1720081471,
             0,
-            "./directory_with_setuid".into(),
+            "./directory_with_setuid",
         );
         write_directory(&header, true, LOG_LEVEL_WARNING, &mut mtimes).unwrap();
 
@@ -972,7 +972,7 @@ mod tests {
             0,
             1720081471,
             9,
-            "./file_with_setuid".into(),
+            "./file_with_setuid",
         );
         let cpio = b"!/bin/sh\n\0\0\0";
         write_file(
@@ -1004,7 +1004,7 @@ mod tests {
             0,
             1721427072,
             12,
-            "./dead_symlink".into(),
+            "./dead_symlink",
         );
         let cpio = b"/nonexistent";
         write_symbolic_link(&mut cpio.as_ref(), &header, true, LOG_LEVEL_WARNING).unwrap();
