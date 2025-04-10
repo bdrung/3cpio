@@ -11,6 +11,7 @@ use std::io::ErrorKind;
 use std::io::Result;
 use std::io::SeekFrom;
 use std::os::unix::fs::{chown, fchown, lchown, symlink};
+use std::path::{Path, PathBuf};
 use std::process::ChildStdout;
 use std::process::Command;
 use std::process::Stdio;
@@ -550,12 +551,51 @@ fn write_symbolic_link<R: Read + SeekForward>(
     Ok(())
 }
 
+fn absolute_parent_directory<S: AsRef<str>>(path: S, base_dir: &Path) -> Result<PathBuf>
+where
+    PathBuf: From<S>,
+{
+    let abspath = if path.as_ref().starts_with("/") {
+        PathBuf::from(path)
+    } else {
+        base_dir.join(path.as_ref())
+    };
+    match abspath.parent() {
+        Some(d) => Ok(d.into()),
+        // TODO: Use ErrorKind::InvalidFilename once stable.
+        None => Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("Path {:#?} has no parent directory.", abspath),
+        )),
+    }
+}
+
+fn check_path_is_canonical_subdir<S: AsRef<str> + std::fmt::Display>(
+    path: S,
+    dir: &Path,
+    base_dir: &PathBuf,
+) -> Result<PathBuf> {
+    let canonicalized_path = dir.canonicalize()?;
+    if !canonicalized_path.starts_with(base_dir) {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!(
+                "The parent directory of \"{}\" (resolved to {:#?}) is not within the directory {:#?}.",
+                path, canonicalized_path, base_dir
+            ),
+        ));
+    }
+    Ok(canonicalized_path)
+}
+
 fn read_cpio_and_extract<R: Read + SeekForward>(
     file: &mut R,
+    base_dir: &PathBuf,
     preserve_permissions: bool,
     log_level: u32,
 ) -> Result<()> {
     let mut extractor = Extractor::new();
+    let mut previous_checked_dir = PathBuf::new();
     loop {
         let header = match Header::read(file) {
             Ok(header) => {
@@ -572,6 +612,17 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
             writeln!(std::io::stderr(), "{:?}", header)?;
         } else if log_level >= LOG_LEVEL_INFO {
             writeln!(std::io::stderr(), "{}", header.filename)?;
+        }
+
+        if !header.is_root_directory() {
+            let absdir = absolute_parent_directory(&header.filename, base_dir)?;
+            // canonicalize() is an expensive call. So cache the previously resolved
+            // parent directory. Skip the path traversal check in case the absolute
+            // parent directory has no symlinks and matches the previouly checked directory.
+            if absdir != previous_checked_dir {
+                previous_checked_dir =
+                    check_path_is_canonical_subdir(&header.filename, &absdir, base_dir)?;
+            }
         }
 
         match header.mode & MODE_FILETYPE_MASK {
@@ -687,10 +738,15 @@ pub fn extract_cpio_archive(
             Some(x) => x?,
         };
         if command.get_program() == "cpio" {
-            read_cpio_and_extract(&mut file, preserve_permissions, log_level)?;
+            read_cpio_and_extract(&mut file, &base_dir, preserve_permissions, log_level)?;
         } else {
             let mut decompressed = decompress(&mut command, file)?;
-            read_cpio_and_extract(&mut decompressed, preserve_permissions, log_level)?;
+            read_cpio_and_extract(
+                &mut decompressed,
+                &base_dir,
+                preserve_permissions,
+                log_level,
+            )?;
             break;
         }
         count += 1;
@@ -737,7 +793,7 @@ pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W, log_level: u32) 
 
 #[cfg(test)]
 mod tests {
-    use std::env;
+    use std::env::{self, current_dir, set_current_dir};
     use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 
     use super::*;
@@ -755,12 +811,78 @@ mod tests {
         fn tzset();
     }
 
+    struct TempDir {
+        path: PathBuf,
+        cwd: PathBuf,
+    }
+
+    impl TempDir {
+        fn new() -> Result<Self> {
+            // Use some very pseudo-random number
+            let cwd = current_dir()?;
+            let epoch = SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap();
+            let name = std::option_env!("CARGO_PKG_NAME").unwrap();
+            let dir_builder = std::fs::DirBuilder::new();
+            let mut path = env::temp_dir();
+            path.push(format!("{}-{}", name, epoch.subsec_nanos()));
+            dir_builder.create(&path).map(|_| Self { path, cwd })
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = set_current_dir(&self.cwd);
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
     impl UserGroupCache {
         fn insert_test_data(&mut self) {
             self.user_cache.insert(1000, Some("user".into()));
             self.group_cache.insert(123, Some("whoopsie".into()));
             self.group_cache.insert(2000, None);
         }
+    }
+
+    #[test]
+    fn test_absolute_parent_directory() {
+        let base_dir = Path::new("/nonexistent/arthur");
+        assert_eq!(
+            absolute_parent_directory("usr/bin/true", base_dir).unwrap(),
+            PathBuf::from("/nonexistent/arthur/usr/bin")
+        );
+        assert_eq!(
+            absolute_parent_directory("/usr/bin/true", base_dir).unwrap(),
+            PathBuf::from("/usr/bin")
+        );
+        assert_eq!(
+            absolute_parent_directory(".", base_dir).unwrap(),
+            PathBuf::from("/nonexistent")
+        );
+    }
+
+    // Test detecting path traversal attacks like CVE-2015-1197
+    #[test]
+    fn test_read_cpio_and_extract_path_traversal() {
+        let mut file = File::open("tests/path-traversal.cpio").unwrap();
+        let tempdir = TempDir::new().unwrap();
+        set_current_dir(&tempdir.path).unwrap();
+        let got =
+            read_cpio_and_extract(&mut file, &tempdir.path, false, LOG_LEVEL_WARNING).unwrap_err();
+        assert_eq!(got.kind(), ErrorKind::InvalidData);
+        assert_eq!(got.to_string(), format!(
+            "The parent directory of \"tmp/trav.txt\" (resolved to \"/tmp\") is not within the directory {:#?}.",
+            &tempdir.path
+        ));
+    }
+
+    #[test]
+    fn test_absolute_parent_directory_error() {
+        let got = absolute_parent_directory(".", Path::new("/")).unwrap_err();
+        assert_eq!(got.kind(), ErrorKind::InvalidData);
+        assert_eq!(got.to_string(), "Path \"/.\" has no parent directory.");
     }
 
     #[test]

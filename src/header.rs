@@ -74,6 +74,10 @@ impl Header {
         (u64::from(self.major) << 32) | u64::from(self.minor)
     }
 
+    pub fn is_root_directory(&self) -> bool {
+        self.filename == "." && self.mode & MODE_FILETYPE_MASK == FILETYPE_DIRECTORY
+    }
+
     pub fn mode_perm(&self) -> u32 {
         self.mode & MODE_PERMISSION_MASK
     }
@@ -302,5 +306,23 @@ mod tests {
         let got = hex_str_to_u32(b"no\xc3\x28utf8").unwrap_err();
         assert_eq!(got.kind(), ErrorKind::InvalidData);
         assert_eq!(got.to_string(), "Invalid hexadecimal value 'no\\xc3(utf8'");
+    }
+
+    #[test]
+    fn test_is_root_directory() {
+        let header = Header::new(0, 0o040_755, 0, 0, 1, 1744150584, 0, ".");
+        assert!(header.is_root_directory());
+    }
+
+    #[test]
+    fn test_is_root_directory_not_root_path() {
+        let header = Header::new(0, 0o040_755, 0, 0, 1, 1744150584, 0, "path");
+        assert!(!header.is_root_directory());
+    }
+
+    #[test]
+    fn test_is_root_directory_is_file() {
+        let header = Header::new(0, 0o100_644, 0, 0, 1, 1744150584, 0, ".");
+        assert!(!header.is_root_directory());
     }
 }

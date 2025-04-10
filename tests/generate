@@ -51,3 +51,8 @@ xz --check=crc32 --threads=1 -9 < "$input/shell.cpio" >> xz.cpio
 
 cp single.cpio zstd.cpio
 zstd -q -9 < "$input/shell.cpio" >> zstd.cpio
+
+mkdir "$input/path-traversal"
+ln -s /tmp "$input/path-traversal/tmp"
+echo "TEST Traversal" > "$input/path-traversal/tmpYtrav.txt"
+generate_cpio "$input/path-traversal" | sed "s@tmpY@tmp/@g" > path-traversal.cpio
