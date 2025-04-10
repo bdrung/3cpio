@@ -47,7 +47,7 @@ cp single.cpio lzop.cpio
 lzop -9 -c "$input/shell.cpio" >> lzop.cpio
 
 cp single.cpio xz.cpio
-xz --check=crc32 -9 < "$input/shell.cpio" >> xz.cpio
+xz --check=crc32 --threads=1 -9 < "$input/shell.cpio" >> xz.cpio
 
 cp single.cpio zstd.cpio
 zstd -q -9 < "$input/shell.cpio" >> zstd.cpio
