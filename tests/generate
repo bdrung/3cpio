@@ -10,6 +10,13 @@ export SOURCE_DATE_EPOCH=1713104326
 
 # Generate the test data
 
+generate_cpio() {
+    input_dir="$1"
+    find "$input_dir" -depth -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" {} \;
+    { cd "$input_dir"; find .; } | LC_ALL=C sort \
+        | cpio --reproducible --quiet -o -H newc -D "$input_dir"
+}
+
 cd "$(dirname "$0")"
 
 input="$(mktemp -d "${TMPDIR-/tmp}/3cpio_XXXXXX")"
@@ -17,15 +24,11 @@ trap 'rm -rf "${input}"' 0 1 2 3 6
 
 mkdir -p "$input/single/path"
 echo "content" > "$input/single/path/file"
-find "${input}/single" -depth -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" {} \;
-{ cd "$input/single"; find .; } | LC_ALL=C sort \
-    | cpio --reproducible --quiet -o -H newc -D "$input/single" > single.cpio
+generate_cpio "${input}/single" > single.cpio
 
 mkdir -p "$input/shell/usr/bin/"
 echo "This is a fake busybox binary to simulate a POSIX shell" > "$input/shell/usr/bin/sh"
-find "${input}/shell" -depth -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" {} \;
-{ cd "$input/shell"; find .; } | LC_ALL=C sort \
-    | cpio --reproducible --quiet -o -H newc -D "$input/shell" > "$input/shell.cpio"
+generate_cpio "${input}/shell" > "$input/shell.cpio"
 touch --date="@${SOURCE_DATE_EPOCH}" "$input/shell.cpio"
 
 cp single.cpio bzip2.cpio
