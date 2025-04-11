@@ -26,6 +26,7 @@ mod filetype;
 mod header;
 mod libc;
 mod seek_forward;
+mod writer;
 
 pub const LOG_LEVEL_WARNING: u32 = 5;
 pub const LOG_LEVEL_INFO: u32 = 7;
