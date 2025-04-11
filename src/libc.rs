@@ -59,12 +59,10 @@ pub fn getgrgid_name(gid: u32) -> Result<Option<String>> {
     Ok(Some(name.to_string_lossy().to_string()))
 }
 
-#[cfg(test)]
 pub fn major(dev: u64) -> u32 {
     libc::major(dev)
 }
 
-#[cfg(test)]
 pub fn minor(dev: u64) -> u32 {
     libc::minor(dev)
 }
