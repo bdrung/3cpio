@@ -1,6 +1,15 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.5.1 (2025-04-11)
+------------------
+
+### Fixed
+
+* Fix directory traversal vulnerability: Prevent extracting CPIOs outside of the
+  destination directory to prevent directory traversal attacks. This new
+  behaviour is similar to `cpio --no-absolute-filenames`.
+
 0.5.0 (2025-03-30)
 ------------------
 
