@@ -1,9 +1,10 @@
 // Copyright (C) 2024, Benjamin Drung <bdrung@posteo.de>
 // SPDX-License-Identifier: ISC
 
-use std::fs::Permissions;
-use std::io::{Error, ErrorKind, Read, Result};
-use std::os::unix::fs::PermissionsExt;
+use std::fmt::Display;
+use std::fs::{Metadata, Permissions};
+use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 use crate::seek_forward::SeekForward;
 use crate::{align_to_4_bytes, SeenFiles};
@@ -67,6 +68,66 @@ impl Header {
             rminor: 0,
             filename: filename.into(),
         }
+    }
+
+    pub fn from_metadata<S>(stat: &Metadata, ino: u32, filename: S) -> Result<Self>
+    where
+        S: Into<String> + Display,
+    {
+        let nlink = if stat.is_dir() {
+            2
+        } else {
+            let nlink = stat.nlink();
+            match nlink.try_into() {
+                Ok(n) => n,
+                Err(_) => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        format!("nlink {} of '{}' too large", nlink, filename),
+                    ))
+                }
+            }
+        };
+        let mtime = {
+            let mtime = stat.mtime();
+            match mtime.try_into() {
+                Ok(t) => t,
+                Err(_) => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        format!("mtime {} of '{}' too large", mtime, filename),
+                    ))
+                }
+            }
+        };
+        let filesize = if stat.is_dir() {
+            0
+        } else {
+            let size = stat.size();
+            match size.try_into() {
+                Ok(s) => s,
+                Err(_) => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        format!("file size {} of '{}' too large", size, filename),
+                    ))
+                }
+            }
+        };
+        Ok(Self {
+            ino,
+            mode: stat.mode(),
+            uid: stat.uid(),
+            gid: stat.gid(),
+            nlink,
+            mtime,
+            filesize,
+            major: 0,
+            minor: 0,
+            rmajor: 0,
+            rminor: 0,
+            filename: filename.into(),
+        })
     }
 
     // Return major and minor combined as u64
@@ -191,6 +252,30 @@ impl Header {
         }
         seen_files.get(&self.ino_and_dev())
     }
+
+    pub fn write<W: Write>(&self, file: &mut W) -> Result<()> {
+        // The filename needs to be terminated with \0.
+        let filename_len: u32 = match (self.filename.len() + 1).try_into() {
+            Ok(l) => l,
+            Err(_) => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("Path '{}' exceeds filename length limit", self.filename),
+                ))
+            }
+        };
+        let padding_len = align_to_4_bytes(CPIO_HEADER_LENGTH + filename_len) as usize;
+        let padding = [0u8; 5];
+        write!(
+            file,
+            "{}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}00000000{}{}",
+            std::str::from_utf8(&CPIO_MAGIC_NUMBER).unwrap(), self.ino,
+            self.mode, self.uid, self.gid, self.nlink, self.mtime, self.filesize,
+            self.major, self.minor, self.rmajor, self.rminor,
+            filename_len, self.filename,
+            std::str::from_utf8(&padding[0..padding_len+1]).unwrap(),
+        )
+    }
 }
 
 fn check_begins_with_cpio_magic_header(header: &[u8]) -> std::io::Result<()> {
@@ -249,6 +334,43 @@ fn read_filename<R: Read>(file: &mut R, namesize: u32) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::symlink_metadata;
+
+    #[test]
+    fn test_header_from_metadata_directory() {
+        let filename = "tests";
+        let stat = symlink_metadata(filename).unwrap();
+        let header = Header::from_metadata(&stat, 37, filename).unwrap();
+        assert_eq!(header.ino, 37);
+        assert_eq!(header.mode & MODE_FILETYPE_MASK, FILETYPE_DIRECTORY);
+        assert_eq!(header.mode, stat.mode());
+        assert_eq!(header.nlink, 2);
+        assert_eq!(stat.mtime(), header.mtime.into());
+        assert_eq!(header.filesize, 0);
+        assert_eq!(header.major, 0);
+        assert_eq!(header.minor, 0);
+        assert_eq!(header.rmajor, 0);
+        assert_eq!(header.rminor, 0);
+        assert_eq!(header.filename, filename);
+    }
+
+    #[test]
+    fn test_header_from_metadata_regular_file() {
+        let filename = "tests/single.cpio";
+        let stat = symlink_metadata(filename).unwrap();
+        let header = Header::from_metadata(&stat, 42, filename).unwrap();
+        assert_eq!(header.ino, 42);
+        assert_eq!(header.mode & MODE_FILETYPE_MASK, FILETYPE_REGULAR_FILE);
+        assert_eq!(header.mode, stat.mode());
+        assert_eq!(header.nlink, 1);
+        assert_eq!(stat.mtime(), header.mtime.into());
+        assert_eq!(header.filesize, 512);
+        assert_eq!(header.major, 0);
+        assert_eq!(header.minor, 0);
+        assert_eq!(header.rmajor, 0);
+        assert_eq!(header.rminor, 0);
+        assert_eq!(header.filename, filename);
+    }
 
     #[test]
     fn test_header_read() {
@@ -273,7 +395,16 @@ mod tests {
                 rminor: 0,
                 filename: "path/file".into()
             }
-        )
+        );
+
+        // Test writing the header and get the original data back
+        let mut output = Vec::new();
+        header.write(&mut output).unwrap();
+        output.write_all(b"content\0").unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            std::str::from_utf8(cpio_data).unwrap(),
+        );
     }
 
     #[test]
@@ -285,6 +416,32 @@ mod tests {
         assert_eq!(
             got.to_string(),
             "Invalid CPIO magic number 'abc\\tef'. Expected 070701"
+        );
+    }
+
+    #[test]
+    fn test_header_write() {
+        let header = Header {
+            ino: 42,
+            mode: 0o43_777,
+            uid: 1000,
+            gid: 2001,
+            nlink: 2,
+            mtime: 1720081471,
+            filesize: 0,
+            major: 3,
+            minor: 7,
+            rmajor: 42,
+            rminor: 153,
+            filename: "./directory_with_setuid".into(),
+        };
+        let mut output = Vec::new();
+        header.write(&mut output).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "0707010000002A000047FF000003E8000007D10000000266865C3F00000000\
+            00000003000000070000002A000000990000001800000000\
+            ./directory_with_setuid\0\0\0",
         );
     }
 
