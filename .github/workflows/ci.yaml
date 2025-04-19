@@ -46,3 +46,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run rustfmt
         run: cargo fmt --all --check
+
+  man:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install asciidoctor
+        run: >
+          sudo apt-get update
+          && sudo apt-get install --no-install-recommends --yes
+          asciidoctor
+      - uses: actions/checkout@v4
+      - name: Build man pages
+        run: asciidoctor -b manpage man/3cpio.1.adoc

@@ -1,0 +1,166 @@
+3cpio(1)
+========
+Benjamin Drung
+:doctype: manpage
+:manmanual: 3cpio
+:mansource: 3cpio 0.5.1
+:manversion: 0.5.1
+
+== Name
+
+3cpio - manage initrd cpio archives
+
+== Synopsis
+
+*3cpio* *--count* _FILE_
+
+*3cpio* {*-e*|*--examine*} _FILE_
+
+*3cpio* {*-t*|*--list*} [*-v*] _FILE_
+
+*3cpio* {*-x*|*--extract*} [*-v*|*--debug*] [*-C* _DIR_] [*-p*] [*-s* _NAME_]
+[*--force*] _FILE_
+
+*3cpio* {*-V*|*--version*}
+
+*3cpio* {*-h*|*--help*}
+
+== Description
+
+*3cpio* is a tool to manage initramfs cpio files for the Linux kernel. The Linux
+kernel's
+https://www.kernel.org/doc/html/latest/driver-api/early-userspace/buffer-format.html[initramfs buffer format]
+is based around the `newc` or `crc` cpio formats. Multiple cpio archives can be
+concatenated and the last archive can be compressed. Different compression
+algorithms can be used depending on what support was compiled into the Linux
+kernel. *3cpio* is tailored to initramfs cpio files and will not gain support for
+other cpio formats.
+
+Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, zstd.
+
+== Modes
+
+*--count* _FILE_::
+  Print the number of concatenated cpio archives.
+
+*-e*, *--examine* _FILE_::
+  List the offsets of the cpio archives and their compression.
+
+*-t*, *--list* _FILE_::
+  List the contents of the cpio archives.
+
+*-x*, *--extract* _FILE_::
+  Extract cpio archives.
+
+*-V*, *--version*::
+  Print version number.
+
+*-h*, *--help*::
+   Print help message.
+
+== Options
+
+*-C* _DIR_, *--directory*=_DIR_::
+  Change directory before performing any operation, but after opening the _FILE_.
+  This option is only taken into account in the *--extract* mode.
+
+*-p*, *--preserve-permissions*::
+  Set permissions of extracted files to those recorded in the archive (default
+  for superuser). This option is only taken into account in the *--extract*
+  mode.
+
+*-s* _NAME_, *--subdir*=_NAME_::
+  Extract the cpio archives into separate sub-directories (using the given
+  _NAME_ plus an incrementing number). This option is only taken into account
+  in the *--extract* mode.
+
+*-v*, *--verbose*::
+  Verbose output. This option is only taken into account in the *--extract* and
+  *--list* modes.
+
+*--debug*::
+  Debug output. This option is only taken into account in the *--extract* and
+  *--list* modes.
+
+*--force*::
+  Force overwriting existing files. This option is only taken into account in
+  the *--extract* mode.
+
+== Exit status
+
+*0*::
+  Success.
+
+*1*::
+  Failure.
+
+== Examples
+
+List the number of cpio archives that an initramfs file contains:
+
+[example,shell]
+----
+$ 3cpio --count /boot/initrd.img
+4
+----
+
+Examine the content of the initramfs cpio on an Ubuntu 24.04 system:
+
+[example,shell]
+----
+$ 3cpio --examine /boot/initrd.img
+0	cpio
+77312	cpio
+7286272	cpio
+85523968	zstd
+----
+
+This initramfs cpio consists of three uncompressed cpio archives followed by a
+Zstandard-compressed cpio archive.
+
+List the content of the initramfs cpio on an Ubuntu 24.04 system:
+
+[example,shell]
+----
+$ 3cpio --list /boot/initrd.img
+.
+kernel
+kernel/x86
+kernel/x86/microcode
+kernel/x86/microcode/AuthenticAMD.bin
+kernel
+kernel/x86
+kernel/x86/microcode
+kernel/x86/microcode/.enuineIntel.align.0123456789abc
+kernel/x86/microcode/GenuineIntel.bin
+.
+usr
+usr/lib
+usr/lib/firmware
+usr/lib/firmware/3com
+usr/lib/firmware/3com/typhoon.bin.zst
+[...]
+----
+
+The first cpio contains only the AMD microcode. The second cpio contains only
+the Intel microcode. The third cpio contains firmware files and kernel modules.
+
+Extract the content of the initramfs cpio to the initrd subdirectory on an
+Ubuntu 24.04 system:
+
+[example,shell]
+----
+$ 3cpio --extract -C initrd /boot/initrd.img
+$ ls initrd
+bin   cryptroot  init    lib    lib.usr-is-merged  run   scripts  var
+conf  etc        kernel  lib64  libx32             sbin  usr
+----
+
+== See also
+
+bsdcpio(1), cpio(1), lsinitramfs(8), lsinitrd(1)
+
+== Copying
+
+Copyright (C) 2024-2025 Benjamin Drung.
+Free use of this software is granted under the terms of the ISC License.
