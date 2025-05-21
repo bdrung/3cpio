@@ -799,6 +799,9 @@ mod tests {
     use super::*;
     use crate::libc::{major, minor};
 
+    // Lock for tests that rely on / change the current directory
+    static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
+
     fn getgid() -> u32 {
         unsafe { ::libc::getgid() }
     }
@@ -866,6 +869,7 @@ mod tests {
     // Test detecting path traversal attacks like CVE-2015-1197
     #[test]
     fn test_read_cpio_and_extract_path_traversal() {
+        let _lock = TEST_LOCK.lock().unwrap();
         let mut file = File::open("tests/path-traversal.cpio").unwrap();
         let tempdir = TempDir::new().unwrap();
         set_current_dir(&tempdir.path).unwrap();
@@ -897,6 +901,7 @@ mod tests {
 
     #[test]
     fn test_decompress_program_not_found() {
+        let _lock = TEST_LOCK.lock().unwrap();
         let file = File::open("tests/single.cpio").expect("test cpio should be present");
         let mut cmd = Command::new("non-existing-program");
         let got = decompress(&mut cmd, file).unwrap_err();
@@ -909,6 +914,7 @@ mod tests {
 
     #[test]
     fn test_get_cpio_archive_count_single() {
+        let _lock = TEST_LOCK.lock().unwrap();
         let mut file = File::open("tests/single.cpio").expect("test cpio should be present");
         let count = get_cpio_archive_count(&mut file).unwrap();
         assert_eq!(count, 1);
@@ -916,6 +922,7 @@ mod tests {
 
     #[test]
     fn test_print_cpio_archive_count() {
+        let _lock = TEST_LOCK.lock().unwrap();
         let mut file = File::open("tests/zstd.cpio").expect("test cpio should be present");
         let mut output = Vec::new();
 
@@ -1035,6 +1042,7 @@ mod tests {
 
     #[test]
     fn test_write_character_device() {
+        let _lock = TEST_LOCK.lock().unwrap();
         if getuid() != 0 {
             // This test needs to run as root.
             return;
@@ -1058,6 +1066,7 @@ mod tests {
 
     #[test]
     fn test_write_directory_with_setuid() {
+        let _lock = TEST_LOCK.lock().unwrap();
         let mut mtimes = BTreeMap::new();
         let header = Header::new(
             1,
@@ -1085,6 +1094,7 @@ mod tests {
 
     #[test]
     fn test_write_file_with_setuid() {
+        let _lock = TEST_LOCK.lock().unwrap();
         let mut seen_files = SeenFiles::new();
         let header = Header::new(
             1,
@@ -1118,6 +1128,7 @@ mod tests {
 
     #[test]
     fn test_write_symbolic_link() {
+        let _lock = TEST_LOCK.lock().unwrap();
         let header = Header::new(
             1,
             0o120_777,
