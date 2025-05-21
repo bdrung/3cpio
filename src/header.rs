@@ -121,6 +121,23 @@ impl Header {
         })
     }
 
+    pub fn trailer() -> Self {
+        Self {
+            ino: 0,
+            mode: 0,
+            uid: 0,
+            gid: 0,
+            nlink: 1,
+            mtime: 0,
+            filesize: 0,
+            major: 0,
+            minor: 0,
+            rmajor: 0,
+            rminor: 0,
+            filename: "TRAILER!!!".into(),
+        }
+    }
+
     // Return major and minor combined as u64
     fn dev(&self) -> u64 {
         (u64::from(self.major) << 32) | u64::from(self.minor)

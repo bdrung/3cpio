@@ -21,10 +21,12 @@ use crate::filetype::*;
 use crate::header::Header;
 use crate::libc::{mknod, set_modified, strftime_local};
 use crate::seek_forward::SeekForward;
+use crate::writer::Writer;
 
 mod filetype;
 mod header;
 mod libc;
+mod manifest;
 mod seek_forward;
 mod writer;
 
@@ -787,6 +789,56 @@ pub fn print_cpio_archive_count<W: Write>(mut file: File, out: &mut W) -> Result
     let count = get_cpio_archive_count(&mut file)?;
     writeln!(out, "{}", count)?;
     Ok(())
+}
+
+struct PathReader<'a, R: BufRead> {
+    reader: &'a mut R,
+}
+
+impl<'a, R: BufRead> PathReader<'a, R> {
+    fn new(reader: &'a mut R) -> Self {
+        Self { reader }
+    }
+}
+
+impl<R: BufRead> Iterator for PathReader<'_, R> {
+    type Item = Result<String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut line: Vec<u8> = Vec::new();
+        // TODO: harden against attacker
+        let read = match self.reader.read_until(b'\n', &mut line) {
+            Ok(read) => read,
+            Err(e) => return Some(Err(e)),
+        };
+        if read == 0 {
+            // EOF reached
+            return None;
+        }
+        if line.last() == Some(&b'\n') {
+            line.pop();
+        }
+        Some(Ok(String::from_utf8(line).unwrap()))
+    }
+}
+
+pub fn create_cpio_archive(mut file: File, log_level: u32) -> Result<()> {
+    let mut cpio_writer = Writer::new(&mut file);
+    //let mut reader = PathReader::from_stdin();
+    let stdin = std::io::stdin();
+    let mut buf_reader = std::io::BufReader::new(stdin);
+    let reader = PathReader::new(&mut buf_reader);
+    for path in reader {
+        let path = path?;
+        if log_level >= LOG_LEVEL_DEBUG {
+            writeln!(std::io::stderr(), "*** Adding '{}'...", path)?;
+        };
+        //cpio_writer.add_path_recursive(member, log_level)?;
+        cpio_writer
+            .add_path(path.clone(), log_level)
+            .map_err(|e| Error::other(format!("error on {}: {}", &path, e)))?;
+    }
+    cpio_writer.add_trailer()
 }
 
 pub fn examine_cpio_content<W: Write>(mut file: File, out: &mut W) -> Result<()> {
