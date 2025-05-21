@@ -17,10 +17,12 @@ use std::process::Command;
 use std::process::Stdio;
 use std::time::SystemTime;
 
-use crate::header::*;
+use crate::filetype::*;
+use crate::header::Header;
 use crate::libc::{mknod, set_modified, strftime_local};
 use crate::seek_forward::SeekForward;
 
+mod filetype;
 mod header;
 mod libc;
 mod seek_forward;

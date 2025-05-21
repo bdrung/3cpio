@@ -5,21 +5,12 @@ use std::fs::Permissions;
 use std::io::{Error, ErrorKind, Read, Result};
 use std::os::unix::fs::PermissionsExt;
 
+use crate::filetype::*;
 use crate::seek_forward::SeekForward;
 use crate::{align_to_4_bytes, SeenFiles};
 
 const CPIO_HEADER_LENGTH: u32 = 110;
 const CPIO_MAGIC_NUMBER: [u8; 6] = *b"070701";
-
-const MODE_PERMISSION_MASK: u32 = 0o007_777;
-pub const MODE_FILETYPE_MASK: u32 = 0o770_000;
-pub const FILETYPE_FIFO: u32 = 0o010_000;
-pub const FILETYPE_CHARACTER_DEVICE: u32 = 0o020_000;
-pub const FILETYPE_DIRECTORY: u32 = 0o040_000;
-pub const FILETYPE_BLOCK_DEVICE: u32 = 0o060_000;
-pub const FILETYPE_REGULAR_FILE: u32 = 0o100_000;
-pub const FILETYPE_SYMLINK: u32 = 0o120_000;
-pub const FILETYPE_SOCKET: u32 = 0o140_000;
 
 #[derive(Debug, PartialEq)]
 pub struct Header {
