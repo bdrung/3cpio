@@ -48,6 +48,8 @@ impl Header {
         nlink: u32,
         mtime: u32,
         filesize: u32,
+        rmajor: u32,
+        rminor: u32,
         filename: S,
     ) -> Self
     where
@@ -63,8 +65,8 @@ impl Header {
             filesize,
             major: 0,
             minor: 0,
-            rmajor: 0,
-            rminor: 0,
+            rmajor,
+            rminor,
             filename: filename.into(),
         }
     }
@@ -310,19 +312,19 @@ mod tests {
 
     #[test]
     fn test_is_root_directory() {
-        let header = Header::new(0, 0o040_755, 0, 0, 1, 1744150584, 0, ".");
+        let header = Header::new(0, 0o040_755, 0, 0, 1, 1744150584, 0, 0, 0, ".");
         assert!(header.is_root_directory());
     }
 
     #[test]
     fn test_is_root_directory_not_root_path() {
-        let header = Header::new(0, 0o040_755, 0, 0, 1, 1744150584, 0, "path");
+        let header = Header::new(0, 0o040_755, 0, 0, 1, 1744150584, 0, 0, 0, "path");
         assert!(!header.is_root_directory());
     }
 
     #[test]
     fn test_is_root_directory_is_file() {
-        let header = Header::new(0, 0o100_644, 0, 0, 1, 1744150584, 0, ".");
+        let header = Header::new(0, 0o100_644, 0, 0, 1, 1744150584, 0, 0, 0, ".");
         assert!(!header.is_root_directory());
     }
 }
