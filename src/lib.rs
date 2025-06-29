@@ -662,8 +662,8 @@ pub fn extract_cpio_archive(
     let mut count = 1;
     let base_dir = std::env::current_dir()?;
     loop {
+        let mut dir = base_dir.clone();
         if let Some(ref s) = subdir {
-            let mut dir = base_dir.clone();
             dir.push(format!("{s}{count}"));
             create_dir_ignore_existing(&dir)?;
             std::env::set_current_dir(&dir)?;
@@ -673,15 +673,10 @@ pub fn extract_cpio_archive(
             Some(x) => x?,
         };
         if compression.is_uncompressed() {
-            read_cpio_and_extract(&mut file, &base_dir, preserve_permissions, log_level)?;
+            read_cpio_and_extract(&mut file, &dir, preserve_permissions, log_level)?;
         } else {
             let mut decompressed = compression.decompress(file)?;
-            read_cpio_and_extract(
-                &mut decompressed,
-                &base_dir,
-                preserve_permissions,
-                log_level,
-            )?;
+            read_cpio_and_extract(&mut decompressed, &dir, preserve_permissions, log_level)?;
             break;
         }
         count += 1;
@@ -840,6 +835,17 @@ mod tests {
         let mut file = File::open("tests/single.cpio").expect("test cpio should be present");
         let count = get_cpio_archive_count(&mut file).unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_extract_cpio_archive_with_subdir() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let file = File::open("tests/single.cpio").unwrap();
+        let tempdir = TempDir::new().unwrap();
+        set_current_dir(&tempdir.path).unwrap();
+        extract_cpio_archive(file, false, Some("cpio".into()), LOG_LEVEL_WARNING).unwrap();
+        let path = tempdir.path.join("cpio1/path/file");
+        assert!(path.exists());
     }
 
     #[test]
