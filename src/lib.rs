@@ -12,15 +12,14 @@ use std::io::Result;
 use std::io::SeekFrom;
 use std::os::unix::fs::{chown, fchown, lchown, symlink};
 use std::path::{Path, PathBuf};
-use std::process::ChildStdout;
-use std::process::Command;
-use std::process::Stdio;
 use std::time::SystemTime;
 
+use crate::compression::Compression;
 use crate::header::*;
 use crate::libc::{mknod, set_modified, strftime_local};
 use crate::seek_forward::SeekForward;
 
+mod compression;
 mod header;
 mod libc;
 mod seek_forward;
@@ -149,7 +148,7 @@ fn read_filename_from_next_cpio_object<R: Read + SeekForward>(file: &mut R) -> R
     Ok(filename)
 }
 
-fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Command>> {
+fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Compression>> {
     let mut buffer = [0; 4];
     while buffer == [0, 0, 0, 0] {
         match file.read_exact(&mut buffer) {
@@ -160,83 +159,19 @@ fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Command>> {
             },
         };
     }
-    let command = match buffer {
-        [0x42, 0x5A, 0x68, _] => {
-            let mut cmd = Command::new("bzip2");
-            cmd.arg("-cd");
-            cmd
-        }
-        [0x30, 0x37, 0x30, 0x37] => Command::new("cpio"),
-        [0x1F, 0x8B, _, _] => {
-            let mut cmd = Command::new("gzip");
-            cmd.arg("-cd");
-            cmd
-        }
-        // Different magic numbers (little endian) for lz4:
-        // v0.1-v0.9: 0x184C2102
-        // v1.0-v1.3: 0x184C2103
-        // v1.4+: 0x184D2204
-        [0x02, 0x21, 0x4C, 0x18] | [0x03, 0x21, 0x4C, 0x18] | [0x04, 0x22, 0x4D, 0x18] => {
-            let mut cmd = Command::new("lz4");
-            cmd.arg("-cd");
-            cmd
-        }
-        [0x5D, _, _, _] => {
-            let mut cmd = Command::new("lzma");
-            cmd.arg("-cd");
-            cmd
-        }
-        // Full magic number for lzop: [0x89, 0x4C, 0x5A, 0x4F, 0x00, 0x0D, 0x0A, 0x1A, 0x0A]
-        [0x89, 0x4C, 0x5A, 0x4F] => {
-            let mut cmd = Command::new("lzop");
-            cmd.arg("-cd");
-            cmd
-        }
-        // Full magic number for xz: [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00]
-        [0xFD, 0x37, 0x7A, 0x58] => {
-            let mut cmd = Command::new("xz");
-            cmd.arg("-cd");
-            cmd
-        }
-        [0x28, 0xB5, 0x2F, 0xFD] => {
-            let mut cmd = Command::new("zstd");
-            cmd.arg("-cdq");
-            cmd
-        }
-        _ => {
-            return Some(Err(Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "Failed to determine CPIO or compression magic number: 0x{:02x}{:02x}{:02x}{:02x} (big endian)",
-                    buffer[0], buffer[1], buffer[2], buffer[3]
-                ),
-            )));
-        }
-    };
     match file.seek(SeekFrom::Current(-4)) {
         Ok(_) => {}
         Err(e) => {
             return Some(Err(e));
         }
     };
-    Some(Ok(command))
-}
-
-fn decompress(command: &mut Command, file: File) -> Result<ChildStdout> {
-    // TODO: Propper error message if spawn fails
-    let cmd = command
-        .stdin(file)
-        .stdout(Stdio::piped())
-        .spawn()
-        .map_err(|e| match e.kind() {
-            ErrorKind::NotFound => Error::other(format!(
-                "Program '{}' not found in PATH.",
-                command.get_program().to_str().unwrap()
-            )),
-            _ => e,
-        })?;
-    // TODO: Should unwrap be replaced by returning Result?
-    Ok(cmd.stdout.unwrap())
+    let compression = match Compression::from_magic_number(buffer) {
+        Ok(compression) => compression,
+        Err(e) => {
+            return Some(Err(e));
+        }
+    };
+    Some(Ok(compression))
 }
 
 fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
@@ -677,12 +612,12 @@ fn seek_to_cpio_end(file: &mut File) -> Result<()> {
 pub fn get_cpio_archive_count(file: &mut File) -> Result<u32> {
     let mut count = 0;
     loop {
-        let command = match read_magic_header(file) {
+        let compression = match read_magic_header(file) {
             None => return Ok(count),
             Some(x) => x?,
         };
         count += 1;
-        if command.get_program() == "cpio" {
+        if compression.is_uncompressed() {
             seek_to_cpio_end(file)?;
         } else {
             break;
@@ -699,7 +634,7 @@ pub fn print_cpio_archive_count<W: Write>(mut file: File, out: &mut W) -> Result
 
 pub fn examine_cpio_content<W: Write>(mut file: File, out: &mut W) -> Result<()> {
     loop {
-        let command = match read_magic_header(&mut file) {
+        let compression = match read_magic_header(&mut file) {
             None => return Ok(()),
             Some(x) => x?,
         };
@@ -707,9 +642,9 @@ pub fn examine_cpio_content<W: Write>(mut file: File, out: &mut W) -> Result<()>
             out,
             "{}\t{}",
             file.stream_position()?,
-            command.get_program().to_str().unwrap()
+            compression.command()
         )?;
-        if command.get_program() == "cpio" {
+        if compression.is_uncompressed() {
             seek_to_cpio_end(&mut file)?;
         } else {
             break;
@@ -733,14 +668,14 @@ pub fn extract_cpio_archive(
             create_dir_ignore_existing(&dir)?;
             std::env::set_current_dir(&dir)?;
         }
-        let mut command = match read_magic_header(&mut file) {
+        let compression = match read_magic_header(&mut file) {
             None => return Ok(()),
             Some(x) => x?,
         };
-        if command.get_program() == "cpio" {
+        if compression.is_uncompressed() {
             read_cpio_and_extract(&mut file, &base_dir, preserve_permissions, log_level)?;
         } else {
-            let mut decompressed = decompress(&mut command, file)?;
+            let mut decompressed = compression.decompress(file)?;
             read_cpio_and_extract(
                 &mut decompressed,
                 &base_dir,
@@ -763,18 +698,18 @@ pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W, log_level: u32) 
         .try_into()
         .unwrap();
     loop {
-        let mut command = match read_magic_header(&mut file) {
+        let compression = match read_magic_header(&mut file) {
             None => return Ok(()),
             Some(x) => x?,
         };
-        if command.get_program() == "cpio" {
+        if compression.is_uncompressed() {
             if log_level >= LOG_LEVEL_INFO {
                 read_cpio_and_print_long_format(&mut file, out, now, &mut user_group_cache)?;
             } else {
                 read_cpio_and_print_filenames(&mut file, out)?;
             }
         } else {
-            let mut decompressed = decompress(&mut command, file)?;
+            let mut decompressed = compression.decompress(file)?;
             if log_level >= LOG_LEVEL_INFO {
                 read_cpio_and_print_long_format(
                     &mut decompressed,
@@ -800,7 +735,7 @@ mod tests {
     use crate::libc::{major, minor};
 
     // Lock for tests that rely on / change the current directory
-    static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
+    pub static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
 
     fn getgid() -> u32 {
         unsafe { ::libc::getgid() }
@@ -897,19 +832,6 @@ mod tests {
     #[test]
     fn test_align_to_4_bytes_is_aligned() {
         assert_eq!(align_to_4_bytes(32), 0);
-    }
-
-    #[test]
-    fn test_decompress_program_not_found() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let file = File::open("tests/single.cpio").expect("test cpio should be present");
-        let mut cmd = Command::new("non-existing-program");
-        let got = decompress(&mut cmd, file).unwrap_err();
-        assert_eq!(got.kind(), ErrorKind::Other);
-        assert_eq!(
-            got.to_string(),
-            "Program 'non-existing-program' not found in PATH."
-        );
     }
 
     #[test]
