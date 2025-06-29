@@ -1,6 +1,18 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.6.0 (2025-06-30)
+------------------
+
+### What's new
+
+* doc: add 3cpio man page
+
+### Fixed
+
+* Fix "No such file or directory" error when using `--subdir`
+* test: fix race condition in tests by using a lock
+
 0.5.1 (2025-04-11)
 ------------------
 
