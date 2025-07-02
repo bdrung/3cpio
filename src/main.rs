@@ -10,20 +10,21 @@ use std::process::ExitCode;
 use lexopt::prelude::*;
 
 use threecpio::{
-    examine_cpio_content, extract_cpio_archive, list_cpio_content, print_cpio_archive_count,
-    LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING,
+    create_cpio_archive, examine_cpio_content, extract_cpio_archive, list_cpio_content,
+    print_cpio_archive_count, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING,
 };
 
 #[derive(Debug)]
 struct Args {
     count: bool,
+    create: bool,
     directory: String,
     examine: bool,
     extract: bool,
     force: bool,
     list: bool,
     log_level: u32,
-    file: String,
+    file: Option<String>,
     preserve_permissions: bool,
     subdir: Option<String>,
 }
@@ -33,12 +34,14 @@ fn print_help() {
     println!(
         "Usage:
     {executable} --count FILE
+    {executable} {{-c|--create}} [-C DIR] [FILE]
     {executable} {{-e|--examine}} FILE
     {executable} {{-t|--list}} [-v] FILE
     {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--force] FILE
 
 Optional arguments:
   --count        Print the number of concatenated cpio archives.
+  -c, --create   Create a new cpio archive.
   -e, --examine  List the offsets of the cpio archives and their compression.
   -t, --list     List the contents of the cpio archives.
   -x, --extract  Extract cpio archives.
@@ -64,6 +67,7 @@ fn print_version() {
 
 fn parse_args() -> Result<Args, lexopt::Error> {
     let mut count = 0;
+    let mut create = 0;
     let mut examine = 0;
     let mut extract = 0;
     let mut force = false;
@@ -78,6 +82,9 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         match arg {
             Long("count") => {
                 count = 1;
+            }
+            Short('c') | Long("create") => {
+                create = 1;
             }
             Short('C') | Long("directory") => {
                 directory = parser.value()?.string()?;
@@ -123,8 +130,10 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         }
     }
 
-    if count + examine + extract + list != 1 {
-        return Err("Either --count, --examine, --extract, or --list must be specified!".into());
+    if count + create + examine + extract + list != 1 {
+        return Err(
+            "Either --count, --create, --examine, --extract, or --list must be specified!".into(),
+        );
     }
 
     if let Some(ref s) = subdir {
@@ -133,15 +142,20 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         }
     }
 
+    if create != 1 && file.is_none() {
+        return Err("missing argument FILE".into());
+    }
+
     Ok(Args {
         count: count == 1,
+        create: create == 1,
         directory,
         examine: examine == 1,
         extract: extract == 1,
         force,
         list: list == 1,
         log_level,
-        file: file.ok_or("missing argument FILE")?,
+        file,
         preserve_permissions,
         subdir,
     })
@@ -198,12 +212,53 @@ fn main() -> ExitCode {
         }
     };
 
-    let file = match File::open(&args.file) {
+    if args.create {
+        let mut file = None;
+        if let Some(path) = args.file.as_ref() {
+            file = match File::create(path) {
+                Ok(f) => Some(f),
+                Err(e) => {
+                    eprintln!("{}: Error: Failed to create '{}': {}", executable, path, e);
+                    return ExitCode::FAILURE;
+                }
+            };
+            if args.log_level >= LOG_LEVEL_DEBUG {
+                eprintln!("Opened '{}' for reading...", path);
+            }
+        }
+        if let Err(e) = set_current_dir(&args.directory) {
+            eprintln!(
+                "{}: Error: Failed to change directory to '{}': {}",
+                executable, args.directory, e
+            );
+            return ExitCode::FAILURE;
+        }
+        let result = create_cpio_archive(file, args.log_level);
+        if let Err(e) = result {
+            match e.kind() {
+                ErrorKind::BrokenPipe => {}
+                _ => {
+                    eprintln!(
+                        "{}: Error: Failed to create of '{}': {}",
+                        executable,
+                        args.file.unwrap_or("stdout".into()),
+                        e
+                    );
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
+        return ExitCode::SUCCESS;
+    };
+
+    let file = match File::open(args.file.as_ref().unwrap()) {
         Ok(f) => f,
         Err(e) => {
             eprintln!(
                 "{}: Error: Failed to open '{}': {}",
-                executable, args.file, e
+                executable,
+                args.file.unwrap(),
+                e
             );
             return ExitCode::FAILURE;
         }
@@ -217,7 +272,12 @@ fn main() -> ExitCode {
     }
 
     let mut stdout = std::io::stdout();
-    let (operation, result) = if args.count {
+    let (operation, result) = if args.list {
+        (
+            "list content",
+            list_cpio_content(file, &mut stdout, args.log_level),
+        )
+    } else if args.count {
         (
             "count number of cpio archives",
             print_cpio_archive_count(file, &mut stdout),
@@ -229,11 +289,6 @@ fn main() -> ExitCode {
             "extract content",
             extract_cpio_archive(file, args.preserve_permissions, args.subdir, args.log_level),
         )
-    } else if args.list {
-        (
-            "list content",
-            list_cpio_content(file, &mut stdout, args.log_level),
-        )
     } else {
         unreachable!("no operation specified");
     };
@@ -244,7 +299,10 @@ fn main() -> ExitCode {
             _ => {
                 eprintln!(
                     "{}: Error: Failed to {} of '{}': {}",
-                    executable, operation, args.file, e
+                    executable,
+                    operation,
+                    args.file.unwrap(),
+                    e
                 );
                 return ExitCode::FAILURE;
             }

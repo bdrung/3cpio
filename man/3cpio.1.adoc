@@ -94,6 +94,33 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
 *1*::
   Failure.
 
+== Manifest
+
+When generating initrd cpio archives, following manifest will be used.
+<cpio_list> is a file containing newline separated entries that
+describe the files to be included in the initramfs archive.
+
+* Each element in the line is separated by a tab.
+* In case an element is equal to - it is treated as not specified
+  and it is derived from the input file.
+* If a line starts with # it is treated as comment and ignored.
+
+----
+# a comment
+<location> <name> file <mode> <uid> <gid> <mtime> <filesize>
+<location> <name> dir <mode> <uid> <gid> <mtime>
+<location> <name> block <mode> <uid> <gid> <mtime> <major> <minor>
+<location> <name> char <mode> <uid> <gid> <mtime> <major> <minor>
+<location> <name> link <mode> <uid> <gid> <mtime> <target>
+<location> <name> fifo <mode> <uid> <gid> <mtime>
+<location> <name> sock <mode> <uid> <gid> <mtime>
+----
+
+fifo are also known as named pipe (see fifo(7))
+
+*Limitations*: Files cannot start with # (will be treated as comment), be equal to - (will be treated as not specified), or contain tabs (will be split by tabs).
+These limitations of the manifest file are not expected to cause problems in practice.
+
 == Examples
 
 List the number of cpio archives that an initramfs file contains:
