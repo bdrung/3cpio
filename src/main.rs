@@ -23,7 +23,7 @@ struct Args {
     force: bool,
     list: bool,
     log_level: u32,
-    file: String,
+    archive: String,
     preserve_permissions: bool,
     subdir: Option<String>,
 }
@@ -32,10 +32,10 @@ fn print_help() {
     let executable = std::env::args().next().unwrap();
     println!(
         "Usage:
-    {executable} --count FILE
-    {executable} {{-e|--examine}} FILE
-    {executable} {{-t|--list}} [-v] FILE
-    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--force] FILE
+    {executable} --count ARCHIVE
+    {executable} {{-e|--examine}} ARCHIVE
+    {executable} {{-t|--list}} [-v] ARCHIVE
+    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--force] ARCHIVE
 
 Optional arguments:
   --count        Print the number of concatenated cpio archives.
@@ -71,7 +71,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     let mut list = 0;
     let mut log_level = LOG_LEVEL_WARNING;
     let mut directory = ".".into();
-    let mut file = None;
+    let mut archive = None;
     let mut subdir: Option<String> = None;
     let mut parser = lexopt::Parser::from_env();
     while let Some(arg) = parser.next()? {
@@ -116,8 +116,8 @@ fn parse_args() -> Result<Args, lexopt::Error> {
             Short('x') | Long("extract") => {
                 extract = 1;
             }
-            Value(val) if file.is_none() => {
-                file = Some(val.string()?);
+            Value(val) if archive.is_none() => {
+                archive = Some(val.string()?);
             }
             _ => return Err(arg.unexpected()),
         }
@@ -141,7 +141,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         force,
         list: list == 1,
         log_level,
-        file: file.ok_or("missing argument FILE")?,
+        archive: archive.ok_or("missing argument ARCHIVE")?,
         preserve_permissions,
         subdir,
     })
@@ -198,12 +198,12 @@ fn main() -> ExitCode {
         }
     };
 
-    let file = match File::open(&args.file) {
+    let archive = match File::open(&args.archive) {
         Ok(f) => f,
         Err(e) => {
             eprintln!(
                 "{}: Error: Failed to open '{}': {}",
-                executable, args.file, e
+                executable, args.archive, e
             );
             return ExitCode::FAILURE;
         }
@@ -220,19 +220,27 @@ fn main() -> ExitCode {
     let (operation, result) = if args.count {
         (
             "count number of cpio archives",
-            print_cpio_archive_count(file, &mut stdout),
+            print_cpio_archive_count(archive, &mut stdout),
         )
     } else if args.examine {
-        ("examine content", examine_cpio_content(file, &mut stdout))
+        (
+            "examine content",
+            examine_cpio_content(archive, &mut stdout),
+        )
     } else if args.extract {
         (
             "extract content",
-            extract_cpio_archive(file, args.preserve_permissions, args.subdir, args.log_level),
+            extract_cpio_archive(
+                archive,
+                args.preserve_permissions,
+                args.subdir,
+                args.log_level,
+            ),
         )
     } else if args.list {
         (
             "list content",
-            list_cpio_content(file, &mut stdout, args.log_level),
+            list_cpio_content(archive, &mut stdout, args.log_level),
         )
     } else {
         unreachable!("no operation specified");
@@ -244,7 +252,7 @@ fn main() -> ExitCode {
             _ => {
                 eprintln!(
                     "{}: Error: Failed to {} of '{}': {}",
-                    executable, operation, args.file, e
+                    executable, operation, args.archive, e
                 );
                 return ExitCode::FAILURE;
             }

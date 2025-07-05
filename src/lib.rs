@@ -29,14 +29,14 @@ pub const LOG_LEVEL_INFO: u32 = 7;
 pub const LOG_LEVEL_DEBUG: u32 = 8;
 
 struct CpioFilenameReader<'a, R: Read + SeekForward> {
-    file: &'a mut R,
+    archive: &'a mut R,
 }
 
 impl<R: Read + SeekForward> Iterator for CpioFilenameReader<'_, R> {
     type Item = Result<String>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match read_filename_from_next_cpio_object(self.file) {
+        match read_filename_from_next_cpio_object(self.archive) {
             Ok(filename) => {
                 if filename == "TRAILER!!!" {
                     None
@@ -141,10 +141,10 @@ fn align_to_4_bytes(length: u32) -> u32 {
 ///
 /// Read the next cpio object header, check the magic, skip the file data.
 /// Return the file name.
-fn read_filename_from_next_cpio_object<R: Read + SeekForward>(file: &mut R) -> Result<String> {
-    let (filesize, filename) = Header::read_only_filesize_and_filename(file)?;
+fn read_filename_from_next_cpio_object<R: Read + SeekForward>(archive: &mut R) -> Result<String> {
+    let (filesize, filename) = Header::read_only_filesize_and_filename(archive)?;
     let skip = filesize + align_to_4_bytes(filesize);
-    file.seek_forward(skip.into())?;
+    archive.seek_forward(skip.into())?;
     Ok(filename)
 }
 
@@ -175,10 +175,10 @@ fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Compression>
 }
 
 fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
-    file: &mut R,
+    archive: &mut R,
     out: &mut W,
 ) -> Result<()> {
-    let cpio = CpioFilenameReader { file };
+    let cpio = CpioFilenameReader { archive };
     for f in cpio {
         let filename = f?;
         writeln!(out, "{}", filename)?;
@@ -187,7 +187,7 @@ fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
 }
 
 fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
-    file: &mut R,
+    archive: &mut R,
     out: &mut W,
     now: i64,
     user_group_cache: &mut UserGroupCache,
@@ -197,7 +197,7 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
     let mut last_mtime = 0;
     let mut time_string: String = "".into();
     loop {
-        let header = match Header::read(file) {
+        let header = match Header::read(archive) {
             Ok(header) => {
                 if header.filename == "TRAILER!!!" {
                     break;
@@ -224,7 +224,7 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
 
         match header.mode & MODE_FILETYPE_MASK {
             FILETYPE_SYMLINK => {
-                let target = header.read_symlink_target(file)?;
+                let target = header.read_symlink_target(archive)?;
                 writeln!(
                     out,
                     "{} {:>3} {:<8} {:<8} {:>8} {} {} -> {}",
@@ -239,7 +239,7 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
                 )?;
             }
             FILETYPE_BLOCK_DEVICE | FILETYPE_CHARACTER_DEVICE => {
-                header.skip_file_content(file)?;
+                header.skip_file_content(archive)?;
                 writeln!(
                     out,
                     "{} {:>3} {:<8} {:<8} {:>3}, {:>3} {} {}",
@@ -254,7 +254,7 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
                 )?;
             }
             _ => {
-                header.skip_file_content(file)?;
+                header.skip_file_content(archive)?;
                 writeln!(
                     out,
                     "{} {:>3} {:<8} {:<8} {:>8} {} {}",
@@ -369,7 +369,7 @@ fn from_mtime(mtime: u32) -> SystemTime {
 }
 
 fn write_file<R: Read + SeekForward>(
-    cpio_file: &mut R,
+    archive: &mut R,
     header: &Header,
     preserve_permissions: bool,
     seen_files: &mut SeenFiles,
@@ -422,7 +422,7 @@ fn write_file<R: Read + SeekForward>(
         file = File::create(&header.filename)?
     };
     header.mark_seen(seen_files);
-    let mut reader = cpio_file.take(header.filesize.into());
+    let mut reader = archive.take(header.filesize.into());
     // TODO: check writing hard-link with length == 0
     // TODO: check overwriting existing files/hardlinks
     let written = std::io::copy(&mut reader, &mut file)?;
@@ -433,7 +433,7 @@ fn write_file<R: Read + SeekForward>(
         )));
     }
     let skip = align_to_4_bytes(header.filesize);
-    cpio_file.seek_forward(skip.into())?;
+    archive.seek_forward(skip.into())?;
     if preserve_permissions {
         fchown(&file, Some(header.uid), Some(header.gid))?;
     }
@@ -443,12 +443,12 @@ fn write_file<R: Read + SeekForward>(
 }
 
 fn write_symbolic_link<R: Read + SeekForward>(
-    cpio_file: &mut R,
+    archive: &mut R,
     header: &Header,
     preserve_permissions: bool,
     log_level: u32,
 ) -> Result<()> {
-    let target = header.read_symlink_target(cpio_file)?;
+    let target = header.read_symlink_target(archive)?;
     if log_level >= LOG_LEVEL_DEBUG {
         writeln!(
             std::io::stderr(),
@@ -524,7 +524,7 @@ fn check_path_is_canonical_subdir<S: AsRef<str> + std::fmt::Display>(
 }
 
 fn read_cpio_and_extract<R: Read + SeekForward>(
-    file: &mut R,
+    archive: &mut R,
     base_dir: &PathBuf,
     preserve_permissions: bool,
     log_level: u32,
@@ -532,7 +532,7 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
     let mut extractor = Extractor::new();
     let mut previous_checked_dir = PathBuf::new();
     loop {
-        let header = match Header::read(file) {
+        let header = match Header::read(archive) {
             Ok(header) => {
                 if header.filename == "TRAILER!!!" {
                     break;
@@ -571,14 +571,14 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
                 &mut extractor.mtimes,
             )?,
             FILETYPE_REGULAR_FILE => write_file(
-                file,
+                archive,
                 &header,
                 preserve_permissions,
                 &mut extractor.seen_files,
                 log_level,
             )?,
             FILETYPE_SYMLINK => {
-                write_symbolic_link(file, &header, preserve_permissions, log_level)?
+                write_symbolic_link(archive, &header, preserve_permissions, log_level)?
             }
             FILETYPE_FIFO | FILETYPE_BLOCK_DEVICE | FILETYPE_SOCKET => {
                 unimplemented!(
@@ -601,24 +601,24 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
     Ok(())
 }
 
-fn seek_to_cpio_end(file: &mut File) -> Result<()> {
-    let cpio = CpioFilenameReader { file };
+fn seek_to_cpio_end(archive: &mut File) -> Result<()> {
+    let cpio = CpioFilenameReader { archive };
     for f in cpio {
         f?;
     }
     Ok(())
 }
 
-pub fn get_cpio_archive_count(file: &mut File) -> Result<u32> {
+pub fn get_cpio_archive_count(archive: &mut File) -> Result<u32> {
     let mut count = 0;
     loop {
-        let compression = match read_magic_header(file) {
+        let compression = match read_magic_header(archive) {
             None => return Ok(count),
             Some(x) => x?,
         };
         count += 1;
         if compression.is_uncompressed() {
-            seek_to_cpio_end(file)?;
+            seek_to_cpio_end(archive)?;
         } else {
             break;
         }
@@ -626,26 +626,26 @@ pub fn get_cpio_archive_count(file: &mut File) -> Result<u32> {
     Ok(count)
 }
 
-pub fn print_cpio_archive_count<W: Write>(mut file: File, out: &mut W) -> Result<()> {
-    let count = get_cpio_archive_count(&mut file)?;
+pub fn print_cpio_archive_count<W: Write>(mut archive: File, out: &mut W) -> Result<()> {
+    let count = get_cpio_archive_count(&mut archive)?;
     writeln!(out, "{}", count)?;
     Ok(())
 }
 
-pub fn examine_cpio_content<W: Write>(mut file: File, out: &mut W) -> Result<()> {
+pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<()> {
     loop {
-        let compression = match read_magic_header(&mut file) {
+        let compression = match read_magic_header(&mut archive) {
             None => return Ok(()),
             Some(x) => x?,
         };
         writeln!(
             out,
             "{}\t{}",
-            file.stream_position()?,
+            archive.stream_position()?,
             compression.command()
         )?;
         if compression.is_uncompressed() {
-            seek_to_cpio_end(&mut file)?;
+            seek_to_cpio_end(&mut archive)?;
         } else {
             break;
         }
@@ -654,7 +654,7 @@ pub fn examine_cpio_content<W: Write>(mut file: File, out: &mut W) -> Result<()>
 }
 
 pub fn extract_cpio_archive(
-    mut file: File,
+    mut archive: File,
     preserve_permissions: bool,
     subdir: Option<String>,
     log_level: u32,
@@ -668,14 +668,14 @@ pub fn extract_cpio_archive(
             create_dir_ignore_existing(&dir)?;
             std::env::set_current_dir(&dir)?;
         }
-        let compression = match read_magic_header(&mut file) {
+        let compression = match read_magic_header(&mut archive) {
             None => return Ok(()),
             Some(x) => x?,
         };
         if compression.is_uncompressed() {
-            read_cpio_and_extract(&mut file, &dir, preserve_permissions, log_level)?;
+            read_cpio_and_extract(&mut archive, &dir, preserve_permissions, log_level)?;
         } else {
-            let mut decompressed = compression.decompress(file)?;
+            let mut decompressed = compression.decompress(archive)?;
             read_cpio_and_extract(&mut decompressed, &dir, preserve_permissions, log_level)?;
             break;
         }
@@ -684,7 +684,7 @@ pub fn extract_cpio_archive(
     Ok(())
 }
 
-pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W, log_level: u32) -> Result<()> {
+pub fn list_cpio_content<W: Write>(mut archive: File, out: &mut W, log_level: u32) -> Result<()> {
     let mut user_group_cache = UserGroupCache::new();
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -693,18 +693,18 @@ pub fn list_cpio_content<W: Write>(mut file: File, out: &mut W, log_level: u32) 
         .try_into()
         .unwrap();
     loop {
-        let compression = match read_magic_header(&mut file) {
+        let compression = match read_magic_header(&mut archive) {
             None => return Ok(()),
             Some(x) => x?,
         };
         if compression.is_uncompressed() {
             if log_level >= LOG_LEVEL_INFO {
-                read_cpio_and_print_long_format(&mut file, out, now, &mut user_group_cache)?;
+                read_cpio_and_print_long_format(&mut archive, out, now, &mut user_group_cache)?;
             } else {
-                read_cpio_and_print_filenames(&mut file, out)?;
+                read_cpio_and_print_filenames(&mut archive, out)?;
             }
         } else {
-            let mut decompressed = compression.decompress(file)?;
+            let mut decompressed = compression.decompress(archive)?;
             if log_level >= LOG_LEVEL_INFO {
                 read_cpio_and_print_long_format(
                     &mut decompressed,
@@ -800,11 +800,11 @@ mod tests {
     #[test]
     fn test_read_cpio_and_extract_path_traversal() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let mut file = File::open("tests/path-traversal.cpio").unwrap();
+        let mut archive = File::open("tests/path-traversal.cpio").unwrap();
         let tempdir = TempDir::new().unwrap();
         set_current_dir(&tempdir.path).unwrap();
-        let got =
-            read_cpio_and_extract(&mut file, &tempdir.path, false, LOG_LEVEL_WARNING).unwrap_err();
+        let got = read_cpio_and_extract(&mut archive, &tempdir.path, false, LOG_LEVEL_WARNING)
+            .unwrap_err();
         assert_eq!(got.kind(), ErrorKind::InvalidData);
         assert_eq!(got.to_string(), format!(
             "The parent directory of \"tmp/trav.txt\" (resolved to \"/tmp\") is not within the directory {:#?}.",
@@ -832,18 +832,18 @@ mod tests {
     #[test]
     fn test_get_cpio_archive_count_single() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let mut file = File::open("tests/single.cpio").expect("test cpio should be present");
-        let count = get_cpio_archive_count(&mut file).unwrap();
+        let mut archive = File::open("tests/single.cpio").expect("test cpio should be present");
+        let count = get_cpio_archive_count(&mut archive).unwrap();
         assert_eq!(count, 1);
     }
 
     #[test]
     fn test_extract_cpio_archive_with_subdir() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let file = File::open("tests/single.cpio").unwrap();
+        let archive = File::open("tests/single.cpio").unwrap();
         let tempdir = TempDir::new().unwrap();
         set_current_dir(&tempdir.path).unwrap();
-        extract_cpio_archive(file, false, Some("cpio".into()), LOG_LEVEL_WARNING).unwrap();
+        extract_cpio_archive(archive, false, Some("cpio".into()), LOG_LEVEL_WARNING).unwrap();
         let path = tempdir.path.join("cpio1/path/file");
         assert!(path.exists());
     }
@@ -851,21 +851,21 @@ mod tests {
     #[test]
     fn test_print_cpio_archive_count() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let mut file = File::open("tests/zstd.cpio").expect("test cpio should be present");
+        let mut archive = File::open("tests/zstd.cpio").expect("test cpio should be present");
         let mut output = Vec::new();
 
-        let count = get_cpio_archive_count(&mut file).unwrap();
+        let count = get_cpio_archive_count(&mut archive).unwrap();
         assert_eq!(count, 2);
 
-        file.seek(SeekFrom::Start(0)).unwrap();
-        print_cpio_archive_count(file, &mut output).unwrap();
+        archive.seek(SeekFrom::Start(0)).unwrap();
+        print_cpio_archive_count(archive, &mut output).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "2\n");
     }
 
     #[test]
     fn test_read_cpio_and_print_long_format_character_device() {
         // Wrapped before mtime and filename
-        let cpio_data = b"07070100000003000021A4000000000000\
+        let archive = b"07070100000003000021A4000000000000\
         00000000000167055BC800000000000000000000000000000005000000010000\
         000C00000000dev/console\0\0\0\
         0707010000000000000000000000000000000000000001\
@@ -876,7 +876,7 @@ mod tests {
         env::set_var("TZ", "UTC");
         unsafe { tzset() };
         read_cpio_and_print_long_format(
-            &mut cpio_data.as_ref(),
+            &mut archive.as_ref(),
             &mut output,
             1728486311,
             &mut user_group_cache,
@@ -891,7 +891,7 @@ mod tests {
     #[test]
     fn test_read_cpio_and_print_long_format_directory() {
         // Wrapped before mtime and filename
-        let cpio_data = b"07070100000001000047FF000000000000007B00000002\
+        let archive = b"07070100000001000047FF000000000000007B00000002\
         66A6E40400000000000000000000000000000000000000000000000B00000000\
         /var/crash\0\0\0\0\
         0707010000000000000000000000000000000000000001\
@@ -903,7 +903,7 @@ mod tests {
         env::set_var("TZ", "UTC");
         unsafe { tzset() };
         read_cpio_and_print_long_format(
-            &mut cpio_data.as_ref(),
+            &mut archive.as_ref(),
             &mut output,
             1722389471,
             &mut user_group_cache,
@@ -918,7 +918,7 @@ mod tests {
     #[test]
     fn test_read_cpio_and_print_long_format_file() {
         // Wrapped before mtime and filename
-        let cpio_data = b"070701000036E4000081A4000003E8000007D000000001\
+        let archive = b"070701000036E4000081A4000003E8000007D000000001\
         66A3285300000041000000000000002400000000000000000000000D00000000\
         conf/modules\0\0\
         linear\nmultipath\nraid0\nraid1\nraid456\nraid5\nraid6\nraid10\nefivarfs\0\0\0\0\
@@ -931,7 +931,7 @@ mod tests {
         env::set_var("TZ", "UTC");
         unsafe { tzset() };
         read_cpio_and_print_long_format(
-            &mut cpio_data.as_ref(),
+            &mut archive.as_ref(),
             &mut output,
             1722645915,
             &mut user_group_cache,
@@ -946,7 +946,7 @@ mod tests {
     #[test]
     fn test_read_cpio_and_print_long_format_symlink() {
         // Wrapped before mtime and filename
-        let cpio_data = b"0707010000000D0000A1FF000000000000000000000001\
+        let archive = b"0707010000000D0000A1FF000000000000000000000001\
         6237389400000007000000000000000000000000000000000000000400000000\
         bin\0\0\0usr/bin\0\
         0707010000000000000000000000000000000000000001\
@@ -956,7 +956,7 @@ mod tests {
         let mut user_group_cache = UserGroupCache::new();
         user_group_cache.insert_test_data();
         read_cpio_and_print_long_format(
-            &mut cpio_data.as_ref(),
+            &mut archive.as_ref(),
             &mut output,
             1722645915,
             &mut user_group_cache,

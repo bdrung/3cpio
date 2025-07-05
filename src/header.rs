@@ -136,12 +136,12 @@ impl Header {
         seen_files.insert(self.ino_and_dev(), self.filename.clone());
     }
 
-    pub fn read<R: Read>(file: &mut R) -> Result<Self> {
+    pub fn read<R: Read>(archive: &mut R) -> Result<Self> {
         let mut buffer = [0; CPIO_HEADER_LENGTH as usize];
-        file.read_exact(&mut buffer)?;
+        archive.read_exact(&mut buffer)?;
         check_begins_with_cpio_magic_header(&buffer)?;
         let namesize = hex_str_to_u32(&buffer[94..102])?;
-        let filename = read_filename(file, namesize)?;
+        let filename = read_filename(archive, namesize)?;
         Ok(Self {
             ino: hex_str_to_u32(&buffer[6..14])?,
             mode: hex_str_to_u32(&buffer[14..22])?,
@@ -158,32 +158,32 @@ impl Header {
         })
     }
 
-    pub fn read_only_filesize_and_filename<R: Read>(file: &mut R) -> Result<(u32, String)> {
+    pub fn read_only_filesize_and_filename<R: Read>(archive: &mut R) -> Result<(u32, String)> {
         let mut header = [0; CPIO_HEADER_LENGTH as usize];
-        file.read_exact(&mut header)?;
+        archive.read_exact(&mut header)?;
         check_begins_with_cpio_magic_header(&header)?;
         let filesize = hex_str_to_u32(&header[54..62])?;
         let namesize = hex_str_to_u32(&header[94..102])?;
-        let filename = read_filename(file, namesize)?;
+        let filename = read_filename(archive, namesize)?;
         Ok((filesize, filename))
     }
 
-    pub fn read_symlink_target<R: Read>(&self, file: &mut R) -> Result<String> {
+    pub fn read_symlink_target<R: Read>(&self, archive: &mut R) -> Result<String> {
         let align = align_to_4_bytes(self.filesize);
         let mut target_bytes = vec![0u8; (self.filesize + align).try_into().unwrap()];
-        file.read_exact(&mut target_bytes)?;
+        archive.read_exact(&mut target_bytes)?;
         target_bytes.truncate(self.filesize.try_into().unwrap());
         // TODO: propper name reading handling
         let target = std::str::from_utf8(&target_bytes).unwrap();
         Ok(target.into())
     }
 
-    pub fn skip_file_content<R: SeekForward>(&self, file: &mut R) -> Result<()> {
+    pub fn skip_file_content<R: SeekForward>(&self, archive: &mut R) -> Result<()> {
         if self.filesize == 0 {
             return Ok(());
         };
         let skip = self.filesize + align_to_4_bytes(self.filesize);
-        file.seek_forward(skip.into())?;
+        archive.seek_forward(skip.into())?;
         Ok(())
     }
 
@@ -228,11 +228,11 @@ fn hex_str_to_u32(bytes: &[u8]) -> Result<u32> {
     }
 }
 
-fn read_filename<R: Read>(file: &mut R, namesize: u32) -> Result<String> {
+fn read_filename<R: Read>(archive: &mut R, namesize: u32) -> Result<String> {
     let header_align = align_to_4_bytes(CPIO_HEADER_LENGTH + namesize);
     let mut filename_bytes = vec![0u8; (namesize + header_align).try_into().unwrap()];
     let filename_length: usize = (namesize - 1).try_into().unwrap();
-    file.read_exact(&mut filename_bytes)?;
+    archive.read_exact(&mut filename_bytes)?;
     if filename_bytes[filename_length] != 0 {
         return Err(Error::new(
             ErrorKind::InvalidData,
@@ -255,10 +255,10 @@ mod tests {
     #[test]
     fn test_header_read() {
         // Wrapped before mtime and filename
-        let cpio_data = b"07070100000002000081B4000003E8000007D000000001\
+        let archive = b"07070100000002000081B4000003E8000007D000000001\
             661BE5C600000008000000000000000000000000000000000000000A00000000\
             path/file\0content\0";
-        let header = Header::read(&mut cpio_data.as_ref()).unwrap();
+        let header = Header::read(&mut archive.as_ref()).unwrap();
         assert_eq!(
             header,
             Header {

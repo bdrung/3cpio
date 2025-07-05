@@ -12,14 +12,14 @@ Benjamin Drung
 
 == Synopsis
 
-*3cpio* *--count* _FILE_
+*3cpio* *--count* _ARCHIVE_
 
-*3cpio* {*-e*|*--examine*} _FILE_
+*3cpio* {*-e*|*--examine*} _ARCHIVE_
 
-*3cpio* {*-t*|*--list*} [*-v*] _FILE_
+*3cpio* {*-t*|*--list*} [*-v*] _ARCHIVE_
 
 *3cpio* {*-x*|*--extract*} [*-v*|*--debug*] [*-C* _DIR_] [*-p*] [*-s* _NAME_]
-[*--force*] _FILE_
+[*--force*] _ARCHIVE_
 
 *3cpio* {*-V*|*--version*}
 
@@ -40,16 +40,16 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
 
 == Modes
 
-*--count* _FILE_::
+*--count* _ARCHIVE_::
   Print the number of concatenated cpio archives.
 
-*-e*, *--examine* _FILE_::
+*-e*, *--examine* _ARCHIVE_::
   List the offsets of the cpio archives and their compression.
 
-*-t*, *--list* _FILE_::
+*-t*, *--list* _ARCHIVE_::
   List the contents of the cpio archives.
 
-*-x*, *--extract* _FILE_::
+*-x*, *--extract* _ARCHIVE_::
   Extract cpio archives.
 
 *-V*, *--version*::
@@ -61,7 +61,7 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
 == Options
 
 *-C* _DIR_, *--directory*=_DIR_::
-  Change directory before performing any operation, but after opening the _FILE_.
+  Change directory before performing any operation, but after opening the _ARCHIVE_.
   This option is only taken into account in the *--extract* mode.
 
 *-p*, *--preserve-permissions*::

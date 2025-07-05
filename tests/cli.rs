@@ -111,7 +111,7 @@ fn examine_single_cpio() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn file_doesnt_exist() -> Result<(), Box<dyn Error>> {
+fn archive_doesnt_exist() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-t").arg("test/file/does/not/exist");
 
@@ -149,13 +149,13 @@ fn list_content_single_cpio() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn missing_file_argument() -> Result<(), Box<dyn Error>> {
+fn missing_archive_argument() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-t");
 
     cmd.output()?
         .assert_failure(2)
-        .assert_stderr_contains("missing argument FILE")
+        .assert_stderr_contains("missing argument ARCHIVE")
         .assert_stdout("");
     Ok(())
 }
