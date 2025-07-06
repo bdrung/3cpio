@@ -15,11 +15,13 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::compression::Compression;
-use crate::header::*;
+use crate::filetype::*;
+use crate::header::Header;
 use crate::libc::{mknod, set_modified, strftime_local};
 use crate::seek_forward::SeekForward;
 
 mod compression;
+mod filetype;
 mod header;
 mod libc;
 mod seek_forward;
