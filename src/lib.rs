@@ -193,6 +193,7 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
     out: &mut W,
     now: i64,
     user_group_cache: &mut UserGroupCache,
+    print_ino: bool,
 ) -> Result<()> {
     // Files can have the same mtime (especially when using SOURCE_DATE_EPOCH).
     // Cache the time string of the last mtime.
@@ -224,6 +225,9 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
             time_string = format_time(header.mtime, now)?;
         };
 
+        if print_ino {
+            write!(out, "{:>4} ", header.ino)?;
+        }
         match header.mode & MODE_FILETYPE_MASK {
             FILETYPE_SYMLINK => {
                 let target = header.read_symlink_target(archive)?;
@@ -701,7 +705,13 @@ pub fn list_cpio_content<W: Write>(mut archive: File, out: &mut W, log_level: u3
         };
         if compression.is_uncompressed() {
             if log_level >= LOG_LEVEL_INFO {
-                read_cpio_and_print_long_format(&mut archive, out, now, &mut user_group_cache)?;
+                read_cpio_and_print_long_format(
+                    &mut archive,
+                    out,
+                    now,
+                    &mut user_group_cache,
+                    log_level >= LOG_LEVEL_DEBUG,
+                )?;
             } else {
                 read_cpio_and_print_filenames(&mut archive, out)?;
             }
@@ -713,6 +723,7 @@ pub fn list_cpio_content<W: Write>(mut archive: File, out: &mut W, log_level: u3
                     out,
                     now,
                     &mut user_group_cache,
+                    log_level >= LOG_LEVEL_DEBUG,
                 )?;
             } else {
                 read_cpio_and_print_filenames(&mut decompressed, out)?;
@@ -882,6 +893,7 @@ mod tests {
             &mut output,
             1728486311,
             &mut user_group_cache,
+            false,
         )
         .unwrap();
         assert_eq!(
@@ -909,6 +921,7 @@ mod tests {
             &mut output,
             1722389471,
             &mut user_group_cache,
+            false,
         )
         .unwrap();
         assert_eq!(
@@ -937,6 +950,7 @@ mod tests {
             &mut output,
             1722645915,
             &mut user_group_cache,
+            false,
         )
         .unwrap();
         assert_eq!(
@@ -962,11 +976,43 @@ mod tests {
             &mut output,
             1722645915,
             &mut user_group_cache,
+            false,
         )
         .unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             "lrwxrwxrwx   1 root     root            7 Mar 20  2022 bin -> usr/bin\n"
+        );
+    }
+
+    #[test]
+    fn test_read_cpio_and_print_long_format_print_ino() {
+        // Wrapped after mtime
+        let archive = b"07070100000000000041ED00000000000000000000000265307180\
+        00000000000000000000000000000000000000000000000200000000.\0\
+        07070100000001000041ED00000000000000000000000265307180\
+        00000000000000000000000000000000000000000000000700000000kernel\0\0\0\0\
+        070701000000000000000000000000000000000000000100000000\
+        00000000000000000000000000000000000000000000000B00000000TRAILER!!!\0\0\0\0";
+        let mut output = Vec::new();
+        let mut user_group_cache = UserGroupCache::new();
+        user_group_cache.insert_test_data();
+        env::set_var("TZ", "UTC");
+        unsafe { tzset() };
+        read_cpio_and_print_long_format(
+            &mut archive.as_ref(),
+            &mut output,
+            1722645915,
+            &mut user_group_cache,
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            concat!(
+                "   0 drwxr-xr-x   2 root     root            0 Oct 19  2023 .\n",
+                "   1 drwxr-xr-x   2 root     root            0 Oct 19  2023 kernel\n"
+            )
         );
     }
 

@@ -114,6 +114,64 @@ Summary
 | `bsdcpio -itvF initrd.img` | 114.9 ± 1.1 | 112.6 | 117.4 | 1.05 ± 0.01 |
 | `cpio -tv --file initrd.img` | 1423.0 ± 3.5 | 1417.1 | 1440.6 | 13.03 ± 0.13 |
 
+Benchmark results on a Raspberry Pi Zero 2W running Ubuntu 24.04 (noble) arm64
+on 2025-07-06:
+
+```
+$ sudo 3cpio -x /boot/initrd.img -C /var/tmp/initrd
+$ ( cd /var/tmp/initrd && find . | LC_ALL=C sort | sudo cpio --reproducible --quiet -o -H newc ) > initrd.img
+$ ls -l initrd.img
+-rw-rw-r-- 1 user user 80422400 Jul  6 11:49 initrd.img
+$ 3cpio -t initrd.img | wc -l
+2542
+$ 3cpio -e initrd.img
+0	cpio
+$ 3cpio -e /boot/initrd.img
+0	cpio
+42943488	zstd
+$ hyperfine -N -w 2 -r 100 "3cpio -t initrd.img" "3cpio -tv initrd.img" "3cpio -t --debug initrd.img" "3cpio -t /boot/initrd.img" "3cpio -tv /boot/initrd.img" "3cpio -t --debug /boot/initrd.img" --export-markdown list-variants.md
+Benchmark 1: 3cpio -t initrd.img
+  Time (mean ± σ):      89.7 ms ±   1.1 ms    [User: 26.8 ms, System: 61.7 ms]
+  Range (min … max):    87.6 ms …  92.8 ms    100 runs
+
+Benchmark 2: 3cpio -tv initrd.img
+  Time (mean ± σ):     112.4 ms ±   1.2 ms    [User: 47.8 ms, System: 63.4 ms]
+  Range (min … max):   110.4 ms … 115.2 ms    100 runs
+
+Benchmark 3: 3cpio -t --debug initrd.img
+  Time (mean ± σ):     114.3 ms ±   1.1 ms    [User: 49.4 ms, System: 63.6 ms]
+  Range (min … max):   112.1 ms … 117.7 ms    100 runs
+
+Benchmark 4: 3cpio -t /boot/initrd.img
+  Time (mean ± σ):     703.8 ms ±   2.6 ms    [User: 39.4 ms, System: 267.5 ms]
+  Range (min … max):   699.1 ms … 712.0 ms    100 runs
+
+Benchmark 5: 3cpio -tv /boot/initrd.img
+  Time (mean ± σ):     722.5 ms ±   3.1 ms    [User: 61.9 ms, System: 268.3 ms]
+  Range (min … max):   715.9 ms … 742.8 ms    100 runs
+
+Benchmark 6: 3cpio -t --debug /boot/initrd.img
+  Time (mean ± σ):     724.4 ms ±   2.5 ms    [User: 65.6 ms, System: 267.1 ms]
+  Range (min … max):   719.2 ms … 733.6 ms    100 runs
+
+Summary
+  3cpio -t initrd.img ran
+    1.25 ± 0.02 times faster than 3cpio -tv initrd.img
+    1.27 ± 0.02 times faster than 3cpio -t --debug initrd.img
+    7.85 ± 0.10 times faster than 3cpio -t /boot/initrd.img
+    8.05 ± 0.10 times faster than 3cpio -tv /boot/initrd.img
+    8.08 ± 0.10 times faster than 3cpio -t --debug /boot/initrd.img
+```
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -t initrd.img` | 89.7 ± 1.1 | 87.6 | 92.8 | 1.00 |
+| `3cpio -tv initrd.img` | 112.4 ± 1.2 | 110.4 | 115.2 | 1.25 ± 0.02 |
+| `3cpio -t --debug initrd.img` | 114.3 ± 1.1 | 112.1 | 117.7 | 1.27 ± 0.02 |
+| `3cpio -t /boot/initrd.img` | 703.8 ± 2.6 | 699.1 | 712.0 | 7.85 ± 0.10 |
+| `3cpio -tv /boot/initrd.img` | 722.5 ± 3.1 | 715.9 | 742.8 | 8.05 ± 0.10 |
+| `3cpio -t --debug /boot/initrd.img` | 724.4 ± 2.5 | 719.2 | 733.6 | 8.08 ± 0.10 |
+
 AMD Ryzen 7 5700G
 -----------------
 
