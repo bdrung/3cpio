@@ -34,7 +34,7 @@ fn print_help() {
         "Usage:
     {executable} --count ARCHIVE
     {executable} {{-e|--examine}} ARCHIVE
-    {executable} {{-t|--list}} [-v] ARCHIVE
+    {executable} {{-t|--list}} [-v|--debug] ARCHIVE
     {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--force] ARCHIVE
 
 Optional arguments:

@@ -16,7 +16,7 @@ Benjamin Drung
 
 *3cpio* {*-e*|*--examine*} _ARCHIVE_
 
-*3cpio* {*-t*|*--list*} [*-v*] _ARCHIVE_
+*3cpio* {*-t*|*--list*} [*-v*|*--debug*] _ARCHIVE_
 
 *3cpio* {*-x*|*--extract*} [*-v*|*--debug*] [*-C* _DIR_] [*-p*] [*-s* _NAME_]
 [*--force*] _ARCHIVE_
@@ -47,7 +47,9 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
   List the offsets of the cpio archives and their compression.
 
 *-t*, *--list* _ARCHIVE_::
-  List the contents of the cpio archives.
+  List the contents of the cpio archives. By default only the file names are printed.
+  If *--verbose* is specified, the long listing format is used (similar to ls --long).
+  If *--debug* is specified, the inode is printed in addition to the long format.
 
 *-x*, *--extract* _ARCHIVE_::
   Extract cpio archives.
