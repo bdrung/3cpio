@@ -137,7 +137,7 @@ mod tests {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
-        dir.push(format!("3cpio-{:?}", now));
+        dir.push(format!("3cpio-{now:?}"));
         create_dir(&dir)?;
         Ok(dir)
     }

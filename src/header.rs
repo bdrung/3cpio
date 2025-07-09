@@ -213,7 +213,7 @@ fn hex_str_to_u32(bytes: &[u8]) -> Result<u32> {
     match u32::from_str_radix(s, 16) {
         Err(_) => Err(Error::new(
             ErrorKind::InvalidData,
-            format!("Invalid hexadecimal value '{}'", s),
+            format!("Invalid hexadecimal value '{s}'"),
         )),
         Ok(value) => Ok(value),
     }

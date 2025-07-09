@@ -70,9 +70,7 @@ impl OutputContainsAssertion for Output {
         let stderr = String::from_utf8(self.stderr.clone()).expect("stderr");
         assert!(
             stderr.contains(expected),
-            "'{}' not found in '{}'",
-            expected,
-            stderr
+            "'{expected}' not found in '{stderr}'",
         );
         self
     }
@@ -91,12 +89,12 @@ fn count_cpio_archives() -> Result<(), Box<dyn Error>> {
 fn examine_compressed_cpio() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzop", "xz", "zstd"] {
         let mut cmd = get_command();
-        cmd.arg("-e").arg(format!("tests/{}.cpio", compression));
+        cmd.arg("-e").arg(format!("tests/{compression}.cpio"));
 
         cmd.output()?
             .assert_stderr("")
             .assert_success()
-            .assert_stdout(format!("0\tcpio\n512\t{}\n", compression));
+            .assert_stdout(format!("0\tcpio\n512\t{compression}\n"));
     }
     Ok(())
 }
@@ -126,7 +124,7 @@ fn archive_doesnt_exist() -> Result<(), Box<dyn Error>> {
 fn list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzma", "lzop", "xz", "zstd"] {
         let mut cmd = get_command();
-        cmd.arg("-t").arg(format!("tests/{}.cpio", compression));
+        cmd.arg("-t").arg(format!("tests/{compression}.cpio"));
 
         cmd.output()?
             .assert_stderr("")
@@ -168,7 +166,7 @@ fn print_version() -> Result<(), Box<dyn Error>> {
     let stdout = cmd.output()?.assert_stderr("").assert_success().stdout;
     let stdout = String::from_utf8(stdout).expect("stdout");
     let words: Vec<&str> = stdout.split_whitespace().collect();
-    assert_eq!(words.len(), 2, "not two words: '{}'", stdout);
+    assert_eq!(words.len(), 2, "not two words: '{stdout}'");
     assert_eq!(words[0], "3cpio");
 
     let version = words[1];

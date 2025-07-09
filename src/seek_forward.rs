@@ -47,7 +47,7 @@ impl SeekForward for &[u8] {
         if read < offset.try_into().unwrap() {
             return Err(Error::new(
                 ErrorKind::UnexpectedEof,
-                format!("read only {} bytes, but {} wanted", read, offset),
+                format!("read only {read} bytes, but {offset} wanted"),
             ));
         }
         Ok(())

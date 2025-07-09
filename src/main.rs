@@ -59,7 +59,7 @@ Optional arguments:
 fn print_version() {
     let name = std::option_env!("CARGO_BIN_NAME").unwrap();
     let version = std::option_env!("CARGO_PKG_VERSION").unwrap();
-    println!("{} {}", name, version);
+    println!("{name} {version}");
 }
 
 fn parse_args() -> Result<Args, lexopt::Error> {
@@ -129,7 +129,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
 
     if let Some(ref s) = subdir {
         if s.contains('/') {
-            return Err(format!("Subdir '{}' must not contain slashes!", s).into());
+            return Err(format!("Subdir '{s}' must not contain slashes!").into());
         }
     }
 
@@ -159,27 +159,26 @@ fn is_root() -> bool {
 fn create_and_set_current_dir(path: &str, force: bool) -> Result<(), String> {
     if let Err(e) = set_current_dir(path) {
         if e.kind() != ErrorKind::NotFound {
-            return Err(format!("Failed to change directory to '{}': {}", path, e));
+            return Err(format!("Failed to change directory to '{path}': {e}"));
         }
         if let Err(e) = create_dir(path) {
-            return Err(format!("Failed to create directory '{}': {}", path, e));
+            return Err(format!("Failed to create directory '{path}': {e}"));
         }
         if let Err(e) = set_current_dir(path) {
-            return Err(format!("Failed to change directory to '{}': {}", path, e));
+            return Err(format!("Failed to change directory to '{path}': {e}"));
         }
     }
     if !force {
         match is_empty_directory(".") {
             Err(e) => {
                 return Err(format!(
-                    "Failed to check content of directory '{}': {}",
-                    path, e
+                    "Failed to check content of directory '{path}': {e}"
                 ));
             }
             Ok(false) => {
                 return Err(format!(
-                    "Target directory '{}' is not empty. Use --force to overwrite existing files!",
-                    path
+                    "Target directory '{path}' is not empty. \
+                    Use --force to overwrite existing files!",
                 ));
             }
             Ok(true) => {}
@@ -193,7 +192,7 @@ fn main() -> ExitCode {
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("{}: Error: {}", executable, e);
+            eprintln!("{executable}: Error: {e}");
             return ExitCode::from(2);
         }
     };
@@ -202,8 +201,8 @@ fn main() -> ExitCode {
         Ok(f) => f,
         Err(e) => {
             eprintln!(
-                "{}: Error: Failed to open '{}': {}",
-                executable, args.archive, e
+                "{executable}: Error: Failed to open '{}': {e}",
+                args.archive
             );
             return ExitCode::FAILURE;
         }
@@ -211,7 +210,7 @@ fn main() -> ExitCode {
 
     if args.extract {
         if let Err(e) = create_and_set_current_dir(&args.directory, args.force) {
-            eprintln!("{}: Error: {}", executable, e);
+            eprintln!("{executable}: Error: {e}");
             return ExitCode::FAILURE;
         }
     }
@@ -251,8 +250,8 @@ fn main() -> ExitCode {
             ErrorKind::BrokenPipe => {}
             _ => {
                 eprintln!(
-                    "{}: Error: Failed to {} of '{}': {}",
-                    executable, operation, args.archive, e
+                    "{executable}: Error: Failed to {operation} of '{}': {e}",
+                    args.archive
                 );
                 return ExitCode::FAILURE;
             }

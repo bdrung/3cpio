@@ -122,7 +122,7 @@ impl Extractor {
     fn set_modified_times(&self, log_level: u32) -> Result<()> {
         for (path, mtime) in self.mtimes.iter().rev() {
             if log_level >= LOG_LEVEL_DEBUG {
-                writeln!(std::io::stderr(), "set mtime {} for '{}'", mtime, path)?;
+                writeln!(std::io::stderr(), "set mtime {mtime} for '{path}'")?;
             };
             set_modified(path, *mtime)?;
         }
@@ -183,7 +183,7 @@ fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
     let cpio = CpioFilenameReader { archive };
     for f in cpio {
         let filename = f?;
-        writeln!(out, "{}", filename)?;
+        writeln!(out, "{filename}")?;
     }
     Ok(())
 }
@@ -506,7 +506,7 @@ where
         // TODO: Use ErrorKind::InvalidFilename once stable.
         None => Err(Error::new(
             ErrorKind::InvalidData,
-            format!("Path {:#?} has no parent directory.", abspath),
+            format!("Path {abspath:#?} has no parent directory."),
         )),
     }
 }
@@ -521,8 +521,8 @@ fn check_path_is_canonical_subdir<S: AsRef<str> + std::fmt::Display>(
         return Err(Error::new(
             ErrorKind::InvalidData,
             format!(
-                "The parent directory of \"{}\" (resolved to {:#?}) is not within the directory {:#?}.",
-                path, canonicalized_path, base_dir
+                "The parent directory of \"{path}\" (resolved to {canonicalized_path:#?}) \
+                is not within the directory {base_dir:#?}.",
             ),
         ));
     }
@@ -550,7 +550,7 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
         };
 
         if log_level >= LOG_LEVEL_DEBUG {
-            writeln!(std::io::stderr(), "{:?}", header)?;
+            writeln!(std::io::stderr(), "{header:?}")?;
         } else if log_level >= LOG_LEVEL_INFO {
             writeln!(std::io::stderr(), "{}", header.filename)?;
         }
@@ -634,7 +634,7 @@ pub fn get_cpio_archive_count(archive: &mut File) -> Result<u32> {
 
 pub fn print_cpio_archive_count<W: Write>(mut archive: File, out: &mut W) -> Result<()> {
     let count = get_cpio_archive_count(&mut archive)?;
-    writeln!(out, "{}", count)?;
+    writeln!(out, "{count}")?;
     Ok(())
 }
 
@@ -772,7 +772,7 @@ mod tests {
             let name = std::option_env!("CARGO_PKG_NAME").unwrap();
             let dir_builder = std::fs::DirBuilder::new();
             let mut path = env::temp_dir();
-            path.push(format!("{}-{}", name, epoch.subsec_nanos()));
+            path.push(format!("{name}-{}", epoch.subsec_nanos()));
             dir_builder.create(&path).map(|_| Self { path, cwd })
         }
     }
