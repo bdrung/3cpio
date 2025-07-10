@@ -682,10 +682,18 @@ impl Manifest {
                     archive.write(&mut stdout, source_date_epoch, log_level)?;
                 }
             } else {
-                let compressor = archive.compression.compress(file, source_date_epoch)?;
+                let mut compressor = archive.compression.compress(file, source_date_epoch)?;
                 let mut writer = BufWriter::new(compressor.stdin.as_ref().unwrap());
                 archive.write(&mut writer, source_date_epoch, log_level)?;
                 writer.flush()?;
+                drop(writer);
+                let exit_status = compressor.wait()?;
+                if !exit_status.success() {
+                    return Err(Error::other(format!(
+                        "{} failed: {exit_status}",
+                        archive.compression.command()
+                    )));
+                }
                 // TODO: Check that the compressed cpio is the last
                 break;
             }
@@ -1339,6 +1347,20 @@ mod tests {
             got.to_string(),
             "line 1: Unknown compression format: brotli"
         );
+    }
+
+    #[test]
+    fn test_manifest_write_fail_compression() {
+        let temp_dir = make_temp_dir().unwrap();
+        let root_dir = File::new(Filetype::Directory, ".", 0o755, 0x333, 0x42, 0x6841897B);
+        let archive = Archive::with_files_compressed(vec![root_dir], Compression::Failing);
+        let manifest = Manifest::new(vec![archive], 0o022);
+        let file = std::fs::File::create(temp_dir.join("initrd.img")).unwrap();
+        let got = manifest
+            .write_archive(Some(file), None, LOG_LEVEL_WARNING)
+            .unwrap_err();
+        assert_eq!(got.to_string(), "false failed: exit status: 1");
+        assert_eq!(got.kind(), ErrorKind::Other);
     }
 
     #[test]

@@ -31,6 +31,8 @@ pub enum Compression {
     },
     #[cfg(test)]
     NonExistent,
+    #[cfg(test)]
+    Failing,
 }
 
 impl Compression {
@@ -98,7 +100,7 @@ impl Compression {
             }
             Self::Uncompressed => {}
             #[cfg(test)]
-            Self::NonExistent => {}
+            Self::NonExistent | Self::Failing => {}
         };
     }
 
@@ -123,7 +125,7 @@ impl Compression {
                             Self::Xz { level: _ } => (0, 9),
                             Self::Zstd { level: _ } => (1, 19),
                             #[cfg(test)]
-                            Self::NonExistent => (0, 0),
+                            Self::NonExistent | Self::Failing => (0, 0),
                         };
                         if level >= min || level <= max {
                             compression.set_level(level.try_into().unwrap());
@@ -158,6 +160,8 @@ impl Compression {
             Self::Zstd { level: _ } => "zstd",
             #[cfg(test)]
             Self::NonExistent => "non-existing-program",
+            #[cfg(test)]
+            Self::Failing => "false",
         }
     }
 
@@ -198,7 +202,7 @@ impl Compression {
             | Self::Lzma { level: _ }
             | Self::Lzop { level: _ } => {}
             #[cfg(test)]
-            Self::NonExistent => {}
+            Self::NonExistent | Self::Failing => {}
         };
 
         match self {
@@ -220,7 +224,7 @@ impl Compression {
             | Self::Xz { level: None }
             | Self::Zstd { level: None } => {}
             #[cfg(test)]
-            Self::NonExistent => {}
+            Self::NonExistent | Self::Failing => {}
         };
         // If we're not doing a reproducible build, enable multithreading
         if source_date_epoch.is_none()
@@ -272,7 +276,7 @@ impl Compression {
             }
             Self::Uncompressed => {}
             #[cfg(test)]
-            Self::NonExistent => {}
+            Self::NonExistent | Self::Failing => {}
         };
         command
     }
