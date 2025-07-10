@@ -1,6 +1,20 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.8.0 (2025-07-11)
+------------------
+
+### What's new
+
+* Use a write buffer for `--create` for a massive performance improvement
+
+### Fixed
+
+* Check exit status of compressor commands
+* test:
+  - Use `gzip` instead of `true` which might be a symlink
+  - Skip `test_file_from_line_location_*` if required file is missing
+
 0.7.0 (2025-07-10)
 ------------------
 
