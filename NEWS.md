@@ -1,6 +1,15 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.7.0 (2025-07-10)
+------------------
+
+### What's new
+
+* Add support for creating cpio archives from a manifest file
+  ([feature #3](https://github.com/bdrung/3cpio/issues/3))
+* Print inode on `--list --debug`
+
 0.6.0 (2025-06-30)
 ------------------
 
