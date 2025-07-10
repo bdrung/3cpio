@@ -1,9 +1,12 @@
 // Copyright (C) 2024, Benjamin Drung <bdrung@posteo.de>
 // SPDX-License-Identifier: ISC
 
-use std::env;
+use std::env::{self, temp_dir};
 use std::error::Error;
-use std::process::{Command, Output};
+use std::fs::File;
+use std::io::{Read, Write};
+use std::process::{Command, Output, Stdio};
+use std::time::SystemTime;
 
 // Derive target directory (e.g. `target/debug`) from current executable
 fn get_target_dir() -> std::path::PathBuf {
@@ -74,6 +77,61 @@ impl OutputContainsAssertion for Output {
         );
         self
     }
+}
+
+#[test]
+fn create_cpio_on_stdout() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("--create");
+    let mut process = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+    let mut stdin = process.stdin.as_ref().unwrap();
+    stdin.write_all(b"/usr\t\t\t\t\t\t1681992796\n")?;
+    let _status = process.wait()?;
+    //let mut stdout = process.stdout.unwrap().take(1000);
+    let mut stdout = process.stdout.unwrap();
+    let mut cpio = Vec::new();
+    stdout.read_to_end(&mut cpio)?;
+    assert_eq!(
+        std::str::from_utf8(&cpio).unwrap(),
+        "07070100000000000041ED00000000000000000000000264412C5C\
+        00000000000000000000000000000000000000000000000400000000\
+        usr\0\0\0\
+        070701000000000000000000000000000000000000000100000000\
+        00000000000000000000000000000000000000000000000B00000000\
+        TRAILER!!!\0\0\0\0",
+    );
+    Ok(())
+}
+
+#[test]
+fn create_cpio_file() -> Result<(), Box<dyn Error>> {
+    let mut path = temp_dir();
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap();
+    path.push(format!("3cpio-{now:?}.cpio"));
+    let path = path.into_os_string().into_string().unwrap();
+
+    let mut cmd = get_command();
+    cmd.args(["--create", &path]);
+    let mut process = cmd.stdin(Stdio::piped()).spawn()?;
+    let mut stdin = process.stdin.as_ref().unwrap();
+    stdin.write_all(b"/usr\t\t\t\t\t\t1681992796\n")?;
+    let _status = process.wait()?;
+
+    let mut cpio = Vec::new();
+    let mut cpio_file = File::open(&path)?;
+    cpio_file.read_to_end(&mut cpio)?;
+    assert_eq!(
+        std::str::from_utf8(&cpio).unwrap(),
+        "07070100000000000041ED00000000000000000000000264412C5C\
+        00000000000000000000000000000000000000000000000400000000\
+        usr\0\0\0\
+        070701000000000000000000000000000000000000000100000000\
+        00000000000000000000000000000000000000000000000B00000000\
+        TRAILER!!!\0\0\0\0",
+    );
+    Ok(())
 }
 
 #[test]

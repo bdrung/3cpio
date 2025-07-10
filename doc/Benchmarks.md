@@ -172,6 +172,44 @@ Summary
 | `3cpio -tv /boot/initrd.img` | 722.5 ± 3.1 | 715.9 | 742.8 | 8.05 ± 0.10 |
 | `3cpio -t --debug /boot/initrd.img` | 724.4 ± 2.5 | 719.2 | 733.6 | 8.08 ± 0.10 |
 
+Benchmark results on a Raspberry Pi Zero 2W running Ubuntu 24.04 (noble) arm64
+on 2025-07-10:
+
+```
+$ ls -l /boot/initrd.img*
+lrwxrwxrwx 1 root root       27 Jul  3 08:18 /boot/initrd.img -> initrd.img-6.8.0-1030-raspi
+-rw-r--r-- 1 root root 57286143 Jul  3 08:23 /boot/initrd.img-6.8.0-1030-raspi
+$ sudo 3cpio -x /boot/initrd.img -C initrd
+$ ( cd initrd && find . ) | sed -e 's,\./,,g' | sort > manifest
+$ wc -l < manifest
+2542
+$ sudo hyperfine -w 1 "3cpio -c initrd1.img -C initrd < manifest" "cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest" "cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest" --export-markdown create.md
+Benchmark 1: 3cpio -c initrd1.img -C initrd < manifest
+  Time (mean ± σ):     13.912 s ±  0.672 s    [User: 0.616 s, System: 4.999 s]
+  Range (min … max):   12.920 s … 15.476 s    10 runs
+
+Benchmark 2: cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest
+  Time (mean ± σ):     12.414 s ±  0.418 s    [User: 0.553 s, System: 4.737 s]
+  Range (min … max):   11.846 s … 13.110 s    10 runs
+
+Benchmark 3: cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest
+  Time (mean ± σ):     12.594 s ±  0.276 s    [User: 0.838 s, System: 5.445 s]
+  Range (min … max):   12.296 s … 13.163 s    10 runs
+
+Summary
+  cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest ran
+    1.01 ± 0.04 times faster than cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest
+    1.12 ± 0.07 times faster than 3cpio -c initrd1.img -C initrd < manifest
+```
+
+| Command | Mean [s] | Min [s] | Max [s] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -c initrd1.img -C initrd < manifest` | 13.912 ± 0.672 | 12.920 | 15.476 | 1.12 ± 0.07 |
+| `cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest` | 12.414 ± 0.418 | 11.846 | 13.110 | 1.00 |
+| `cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest` | 12.594 ± 0.276 | 12.296 | 13.163 | 1.01 ± 0.04 |
+
+The manifest parsing in 3cpio took 135 ms. The remaining 13.777 s were spent creating the cpio archive.
+
 AMD Ryzen 7 5700G
 -----------------
 
@@ -392,3 +430,43 @@ Summary
 | `3cpio -tv /boot/initrd.img` | 9.1 ± 0.1 | 8.8 | 9.5 | 1.00 |
 | `bsdcpio -itvF /boot/initrd.img` | 13.5 ± 0.4 | 12.7 | 14.9 | 1.48 ± 0.05 |
 | `cpio -tv --file /boot/initrd.img` | 383.3 ± 2.2 | 379.6 | 390.0 | 42.14 ± 0.58 |
+
+Benchmark results on a desktop machine with an AMD Ryzen 7 5700G running Ubuntu
+25.04 (plucky) on 2025-07-10. The tests were done in chroots that use overlayfs
+on tmpfs for writes.
+
+```
+$ schroot-wrapper -p initramfs-tools,linux-image-generic,cryptsetup-initramfs,lvm2,kbd,mdadm,ntfs-3g,plymouth,console-setup,libarchive-tools,hyperfine -u root -c noble
+(noble)root@desktop:~# ls -l /boot/initrd.img*
+lrwxrwxrwx 1 root root       27 Jul  9 23:47 /boot/initrd.img -> initrd.img-6.8.0-63-generic
+-rw-r--r-- 1 root root 67139659 Jul  9 23:47 /boot/initrd.img-6.8.0-63-generic
+(noble)root@desktop:~# 3cpio -x /boot/initrd.img -C initrd
+(noble)root@desktop:~# ( cd initrd && find . ) | sed -e 's,\./,,g' | sort > manifest
+(noble)root@desktop:~# wc -l < manifest
+1901
+(noble)root@desktop:~# hyperfine -w 2 -r 100 "3cpio -c initrd1.img -C initrd < manifest" "cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest" "cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest" --export-markdown create.md
+Benchmark 1: 3cpio -c initrd1.img -C initrd < manifest
+  Time (mean ± σ):     225.0 ms ±   3.3 ms    [User: 19.3 ms, System: 205.6 ms]
+  Range (min … max):   218.0 ms … 231.4 ms    100 runs
+
+Benchmark 2: cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest
+  Time (mean ± σ):     245.8 ms ±   2.9 ms    [User: 18.0 ms, System: 227.7 ms]
+  Range (min … max):   239.1 ms … 251.4 ms    100 runs
+
+Benchmark 3: cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest
+  Time (mean ± σ):     328.7 ms ±   3.9 ms    [User: 30.5 ms, System: 297.9 ms]
+  Range (min … max):   322.8 ms … 339.8 ms    100 runs
+
+Summary
+  3cpio -c initrd1.img -C initrd < manifest ran
+    1.09 ± 0.02 times faster than cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest
+    1.46 ± 0.03 times faster than cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest
+```
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -c initrd1.img -C initrd < manifest` | 225.0 ± 3.3 | 218.0 | 231.4 | 1.00 |
+| `cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest` | 245.8 ± 2.9 | 239.1 | 251.4 | 1.09 ± 0.02 |
+| `cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest` | 328.7 ± 3.9 | 322.8 | 339.8 | 1.46 ± 0.03 |
+
+The manifest parsing in 3cpio took 6 ms. The remaining 219 ms were spent creating the cpio archive.

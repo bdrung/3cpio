@@ -18,12 +18,15 @@ use crate::compression::Compression;
 use crate::filetype::*;
 use crate::header::Header;
 use crate::libc::{mknod, set_modified, strftime_local};
+use crate::manifest::Manifest;
 use crate::seek_forward::SeekForward;
 
 mod compression;
+mod extended_error;
 mod filetype;
 mod header;
 mod libc;
+mod manifest;
 mod seek_forward;
 
 pub const LOG_LEVEL_WARNING: u32 = 5;
@@ -632,9 +635,43 @@ pub fn get_cpio_archive_count(archive: &mut File) -> Result<u32> {
     Ok(count)
 }
 
+// Parse SOURCE_DATE_EPOCH environment variable (if set and valid integer)
+fn get_source_date_epoch() -> Option<u32> {
+    match std::env::var("SOURCE_DATE_EPOCH") {
+        Ok(value) => match value.parse::<i64>() {
+            Ok(source_date_epoch) => {
+                if let Ok(x) = source_date_epoch.try_into() {
+                    Some(x)
+                } else if source_date_epoch < 0 {
+                    Some(0)
+                } else {
+                    Some(u32::MAX)
+                }
+            }
+            Err(_) => None,
+        },
+        Err(_) => None,
+    }
+}
+
 pub fn print_cpio_archive_count<W: Write>(mut archive: File, out: &mut W) -> Result<()> {
     let count = get_cpio_archive_count(&mut archive)?;
     writeln!(out, "{count}")?;
+    Ok(())
+}
+
+pub fn create_cpio_archive(archive: Option<File>, log_level: u32) -> Result<()> {
+    let source_date_epoch = get_source_date_epoch();
+    let stdin = std::io::stdin();
+    let buf_reader = std::io::BufReader::new(stdin);
+    if log_level >= LOG_LEVEL_DEBUG {
+        eprintln!("Parsing manifest from stdin...");
+    }
+    let manifest = Manifest::from_input(buf_reader, log_level)?;
+    if log_level >= LOG_LEVEL_DEBUG {
+        eprintln!("Writing cpio...");
+    }
+    manifest.write_archive(archive, source_date_epoch, log_level)?;
     Ok(())
 }
 

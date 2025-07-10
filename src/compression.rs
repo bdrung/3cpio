@@ -3,7 +3,7 @@
 
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
-use std::process::{ChildStdout, Command, Stdio};
+use std::process::{ChildStdin, ChildStdout, Command, Stdio};
 
 #[derive(Debug, PartialEq)]
 pub enum Compression {
@@ -65,6 +65,87 @@ impl Compression {
         Ok(compression)
     }
 
+    fn from_str(name: &str) -> Result<Self> {
+        let compression = match name {
+            "" => Self::Uncompressed,
+            "bzip2" => Self::Bzip2 { level: None },
+            "gzip" => Self::Gzip { level: None },
+            "lz4" => Self::Lz4 { level: None },
+            "lzma" => Self::Lzma { level: None },
+            "lzop" => Self::Lzop { level: None },
+            "xz" => Self::Xz { level: None },
+            "zstd" => Self::Zstd { level: None },
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("Unknown compression format: {name}"),
+                ));
+            }
+        };
+        Ok(compression)
+    }
+
+    fn set_level(&mut self, new_level: u32) {
+        match self {
+            Self::Bzip2 { level }
+            | Self::Gzip { level }
+            | Self::Lz4 { level }
+            | Self::Lzma { level }
+            | Self::Lzop { level }
+            | Self::Xz { level }
+            | Self::Zstd { level } => {
+                *level = Some(new_level);
+            }
+            Self::Uncompressed => {}
+            #[cfg(test)]
+            Self::NonExistent => {}
+        };
+    }
+
+    pub fn from_command_line(line: &str) -> Result<Self> {
+        let mut iter = line.split_whitespace();
+        let mut compression = if let Some(cmd) = iter.next() {
+            Self::from_str(cmd)?
+        } else {
+            Self::Uncompressed
+        };
+        for parameter in iter {
+            match parameter.strip_prefix("-") {
+                Some(value) => {
+                    if let Ok(level) = value.parse::<i64>() {
+                        let (min, max) = match compression {
+                            Self::Uncompressed => (0, 0),
+                            Self::Bzip2 { level: _ } => (1, 9),
+                            Self::Gzip { level: _ } => (1, 9),
+                            Self::Lz4 { level: _ } => (1, 12),
+                            Self::Lzma { level: _ } => (0, 9),
+                            Self::Lzop { level: _ } => (1, 9),
+                            Self::Xz { level: _ } => (0, 9),
+                            Self::Zstd { level: _ } => (1, 19),
+                            #[cfg(test)]
+                            Self::NonExistent => (0, 0),
+                        };
+                        if level >= min || level <= max {
+                            compression.set_level(level.try_into().unwrap());
+                        } else {
+                            eprintln!("Compression level '{level}' outside of range from {min} to {max}. Ignoring it.")
+                        }
+                    } else {
+                        eprintln!(
+                            "Unknown/unsupported compression parameter '{parameter}'. Ignoring it.",
+                        )
+                    }
+                }
+                None => {
+                    eprintln!(
+                        "Unknown/unsupported compression parameter '{parameter}'. Ignoring it.",
+                    )
+                }
+            }
+        }
+        Ok(compression)
+    }
+
     pub fn command(&self) -> &str {
         match self {
             Self::Uncompressed => "cpio",
@@ -78,6 +159,88 @@ impl Compression {
             #[cfg(test)]
             Self::NonExistent => "non-existing-program",
         }
+    }
+
+    pub fn compress(
+        &self,
+        file: Option<File>,
+        source_date_epoch: Option<u32>,
+    ) -> Result<ChildStdin> {
+        let mut command = self.compress_command(source_date_epoch);
+        // TODO: Propper error message if spawn fails
+        command.stdin(Stdio::piped());
+        if let Some(file) = file {
+            command.stdout(file);
+        }
+        let cmd = command.spawn().map_err(|e| match e.kind() {
+            ErrorKind::NotFound => Error::other(format!(
+                "Program '{}' not found in PATH.",
+                command.get_program().to_str().unwrap()
+            )),
+            _ => e,
+        })?;
+        // TODO: Should unwrap be replaced by returning Result?
+        Ok(cmd.stdin.unwrap())
+    }
+
+    fn compress_command(&self, source_date_epoch: Option<u32>) -> Command {
+        let mut command = Command::new(self.command());
+        match self {
+            Self::Gzip { level: _ } => {
+                command.arg("-n");
+            }
+            Self::Lz4 { level: _ } => {
+                command.arg("-l");
+            }
+            Self::Xz { level: _ } => {
+                command.arg("--check=crc32");
+            }
+            Self::Zstd { level: _ } => {
+                command.arg("-q");
+            }
+            Self::Uncompressed
+            | Self::Bzip2 { level: _ }
+            | Self::Lzma { level: _ }
+            | Self::Lzop { level: _ } => {}
+            #[cfg(test)]
+            Self::NonExistent => {}
+        };
+
+        match self {
+            Self::Bzip2 { level: Some(level) }
+            | Self::Gzip { level: Some(level) }
+            | Self::Lz4 { level: Some(level) }
+            | Self::Lzma { level: Some(level) }
+            | Self::Lzop { level: Some(level) }
+            | Self::Xz { level: Some(level) }
+            | Self::Zstd { level: Some(level) } => {
+                command.arg(format!("-{level}"));
+            }
+            Self::Uncompressed
+            | Self::Bzip2 { level: None }
+            | Self::Gzip { level: None }
+            | Self::Lz4 { level: None }
+            | Self::Lzma { level: None }
+            | Self::Lzop { level: None }
+            | Self::Xz { level: None }
+            | Self::Zstd { level: None } => {}
+            #[cfg(test)]
+            Self::NonExistent => {}
+        };
+        // If we're not doing a reproducible build, enable multithreading
+        if source_date_epoch.is_none()
+            && matches!(
+                self,
+                Self::Lzma { level: _ } | Self::Xz { level: _ } | Self::Zstd { level: _ }
+            )
+        {
+            command.arg("-T0");
+        } else if source_date_epoch.is_some()
+            && matches!(self, Self::Lzma { level: _ } | Self::Xz { level: _ })
+        {
+            command.arg("-T1");
+        }
+        command
     }
 
     pub fn decompress(&self, file: File) -> Result<ChildStdout> {
@@ -140,5 +303,17 @@ mod tests {
             got.to_string(),
             "Program 'non-existing-program' not found in PATH."
         );
+    }
+
+    #[test]
+    fn test_compression_from_command_line_lz4() {
+        let compression = Compression::from_command_line(" lz4 ").unwrap();
+        assert_eq!(compression, Compression::Lz4 { level: None });
+    }
+
+    #[test]
+    fn test_compression_from_command_line_xz_6() {
+        let compression = Compression::from_command_line("  xz \t -6 ").unwrap();
+        assert_eq!(compression, Compression::Xz { level: Some(6) });
     }
 }

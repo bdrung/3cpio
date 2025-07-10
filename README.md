@@ -10,7 +10,7 @@ algorithms can be used depending on what support was compiled into the Linux
 kernel. 3cpio is tailored to initramfs cpio files and will not gain support for
 other cpio formats.
 
-As of now, 3cpio supports examining, listing, and extracting the content of the
+3cpio supports creating, examining, listing, and extracting the content of the
 initramfs cpio.
 
 **Note**: The Rust crate is named threecpio, because package names are not
@@ -73,6 +73,63 @@ $ 3cpio --extract -C initrd /boot/initrd.img
 $ ls initrd
 bin   cryptroot  init    lib    lib.usr-is-merged  run   scripts  var
 conf  etc        kernel  lib64  libx32             sbin  usr
+```
+
+Create a cpio archive similar to the other cpio tools using the `find` command:
+
+```
+$ cd inputdir && find . | sort | 3cpio --create ../example.cpio
+```
+
+Due to its manifest file format support, 3cpio can create cpio archives without
+the need of copying files into a temporary directory first. Example for creating
+an early microcode cpio image directly using the system installed files:
+
+```
+$ cat manifest
+-	kernel	dir	755	0	0	1751654557
+-	kernel/x86	dir	755	0	0	1752011622
+/usr/lib/firmware/amd-ucode	kernel/x86/microcode
+/usr/lib/firmware/amd-ucode/microcode_amd_fam19h.bin	kernel/x86/microcode/AuthenticAMD.bin
+$ 3cpio --create amd-ucode.img < manifest
+$ 3cpio --list --verbose amd-ucode.img
+drwxr-xr-x   2 root     root            0 Jul  4 20:42 kernel
+drwxr-xr-x   2 root     root            0 Jul  8 23:53 kernel/x86
+drwxr-xr-x   2 root     root            0 Jun 10 10:51 kernel/x86/microcode
+-rw-r--r--   1 root     root       100684 Mar 23 22:42 kernel/x86/microcode/AuthenticAMD.bin
+```
+
+Example for creating an initrd image containing of an uncompressed early
+microcode cpio followed by a Zstandard-compressed cpio:
+
+```
+$ cat manifest
+#cpio
+-	kernel	dir	755	0	0	1751654557
+-	kernel/x86	dir	755	0	0	1752011622
+/usr/lib/firmware/amd-ucode	kernel/x86/microcode
+/usr/lib/firmware/amd-ucode/microcode_amd_fam19h.bin	kernel/x86/microcode/AuthenticAMD.bin
+#cpio: zstd -9
+/
+/bin
+/usr
+/usr/bin
+/usr/bin/bash
+# This is a comment. Leaving the remaining files as task for the reader.
+$ 3cpio --create initrd.img < manifest
+$ 3cpio --examine initrd.img
+0	cpio
+101332	zstd
+$ 3cpio --list --verbose initrd.img
+drwxr-xr-x   2 root     root            0 Jul  4 20:42 kernel
+drwxr-xr-x   2 root     root            0 Jul  8 23:53 kernel/x86
+drwxr-xr-x   2 root     root            0 Jun 10 10:51 kernel/x86/microcode
+-rw-r--r--   1 root     root       100684 Mar 23 22:42 kernel/x86/microcode/AuthenticAMD.bin
+drwxr-xr-x   2 root     root            0 Jun  5 14:11 .
+lrwxrwxrwx   1 root     root            7 Mar 20  2022 bin -> usr/bin
+drwxr-xr-x   2 root     root            0 Apr 20  2023 usr
+drwxr-xr-x   2 root     root            0 Jul  9 09:56 usr/bin
+-rwxr-xr-x   1 root     root      1740896 Mar  5 03:35 usr/bin/bash
 ```
 
 Benchmark results
@@ -143,6 +200,15 @@ Benchmarking the time to extraction initrd:
 | Ryzen 7 5700G | jammy    | 6.8.0-35-generic | 112 MB |  3789 | 0.455s |        2.217s |
 | Ryzen 7 5700G | bookworm | 6.1.0-21-amd64   |  62 MB |  2935 | 0.268s |        1.362s |
 | RasPi Zero 2W | noble    | 6.8.0-1005-raspi |  53 MB |  2534 | 5.075s |      173.847s |
+
+Raw measurements can be found in [doc/Benchmarks.md](doc/Benchmarks.md).
+
+### Creating cpio archives
+
+| System        | Distro | Kernel           | Size   | Files | 3cpio   | bsdcpio | cpio    |
+| ------------- | ------ | ---------------- | ------ | ----- | ------- | ------- | ------- |
+| Ryzen 7 5700G | noble  | 6.8.0-63-generic |  84 MB |  1901 |  0.225s |  0.246s |  0.329s |
+| RasPi Zero 2W | noble  | 6.8.0-1030-raspi |  80 MB |  2542 | 13.912s | 12.414s | 12.594s |
 
 Raw measurements can be found in [doc/Benchmarks.md](doc/Benchmarks.md).
 

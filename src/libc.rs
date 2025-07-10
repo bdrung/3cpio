@@ -59,12 +59,10 @@ pub fn getgrgid_name(gid: u32) -> Result<Option<String>> {
     Ok(Some(name.to_string_lossy().to_string()))
 }
 
-#[cfg(test)]
 pub fn major(dev: u64) -> u32 {
     libc::major(dev)
 }
 
-#[cfg(test)]
 pub fn minor(dev: u64) -> u32 {
     libc::minor(dev)
 }
@@ -125,14 +123,14 @@ pub fn strftime_local(format: &[u8], timestamp: u32) -> Result<String> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use std::env::temp_dir;
     use std::fs::{self, create_dir};
     use std::path::PathBuf;
     use std::time::{Duration, SystemTime};
 
-    fn make_temp_dir() -> Result<PathBuf> {
+    pub fn make_temp_dir() -> Result<PathBuf> {
         let mut dir = temp_dir();
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
