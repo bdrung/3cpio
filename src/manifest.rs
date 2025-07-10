@@ -683,7 +683,7 @@ impl Manifest {
                 }
             } else {
                 let compressor = archive.compression.compress(file, source_date_epoch)?;
-                let mut writer = BufWriter::new(compressor);
+                let mut writer = BufWriter::new(compressor.stdin.as_ref().unwrap());
                 archive.write(&mut writer, source_date_epoch, log_level)?;
                 writer.flush()?;
                 // TODO: Check that the compressed cpio is the last

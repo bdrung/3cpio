@@ -3,7 +3,7 @@
 
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
-use std::process::{ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdout, Command, Stdio};
 
 #[derive(Debug, PartialEq)]
 pub enum Compression {
@@ -161,11 +161,7 @@ impl Compression {
         }
     }
 
-    pub fn compress(
-        &self,
-        file: Option<File>,
-        source_date_epoch: Option<u32>,
-    ) -> Result<ChildStdin> {
+    pub fn compress(&self, file: Option<File>, source_date_epoch: Option<u32>) -> Result<Child> {
         let mut command = self.compress_command(source_date_epoch);
         // TODO: Propper error message if spawn fails
         command.stdin(Stdio::piped());
@@ -179,8 +175,7 @@ impl Compression {
             )),
             _ => e,
         })?;
-        // TODO: Should unwrap be replaced by returning Result?
-        Ok(cmd.stdin.unwrap())
+        Ok(cmd)
     }
 
     fn compress_command(&self, source_date_epoch: Option<u32>) -> Command {
