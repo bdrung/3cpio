@@ -777,8 +777,8 @@ mod tests {
 
     #[test]
     fn test_file_from_line_full_regular_file() {
-        let line = "/usr/bin/true\tusr/bin/true\tfile\t755\t0\t0\t1739259005\t35288";
-        let stat = symlink_metadata("/usr/bin/true").unwrap();
+        let line = "/usr/bin/gzip\tusr/bin/gzip\tfile\t755\t0\t0\t1739259005\t35288";
+        let stat = symlink_metadata("/usr/bin/gzip").unwrap();
         let key = get_hardlink_key(&stat);
         let mut hardlinks = HashMap::new();
         let (file, umask) = File::from_line(line, &mut hardlinks).unwrap();
@@ -786,7 +786,7 @@ mod tests {
             file,
             File::new(
                 Filetype::Hardlink { key, index: 1 },
-                "usr/bin/true",
+                "usr/bin/gzip",
                 0o755,
                 0,
                 0,
@@ -796,7 +796,7 @@ mod tests {
         assert_eq!(umask, 0o022);
         assert_eq!(
             hardlinks,
-            HashMap::from([(key, Hardlink::new("/usr/bin/true", 35288))])
+            HashMap::from([(key, Hardlink::new("/usr/bin/gzip", 35288))])
         );
     }
 
