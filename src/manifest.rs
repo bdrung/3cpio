@@ -554,7 +554,7 @@ impl Archive {
     }
 
     fn write<W: Write>(
-        self,
+        &self,
         output_file: &mut W,
         source_date_epoch: Option<u32>,
         log_level: u32,
@@ -562,7 +562,7 @@ impl Archive {
         let mut next_ino = 0;
         let mut hardlink_ino = HashMap::new();
         let mut header;
-        for file in self.files {
+        for file in &self.files {
             if log_level >= LOG_LEVEL_INFO {
                 writeln!(std::io::stderr(), "{}", file.name)?;
             }
@@ -576,10 +576,10 @@ impl Archive {
                 writeln!(std::io::stderr(), "{header:?}")?;
             };
             header.write(output_file)?;
-            match file.filetype {
+            match &file.filetype {
                 Filetype::Hardlink { key, index: _ } => {
                     if header.filesize > 0 {
-                        let hardlink = self.hardlinks.get(&key).unwrap();
+                        let hardlink = self.hardlinks.get(key).unwrap();
                         copy_file_with_padding(&hardlink.location, hardlink.filesize, output_file)?;
                     }
                 }
