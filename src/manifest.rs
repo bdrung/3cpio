@@ -678,7 +678,7 @@ impl Manifest {
                     archive.write(&mut writer, source_date_epoch, log_level)?;
                     writer.flush()?;
                 } else {
-                    let mut stdout = std::io::stdout();
+                    let mut stdout = std::io::stdout().lock();
                     archive.write(&mut stdout, source_date_epoch, log_level)?;
                 }
             } else {
