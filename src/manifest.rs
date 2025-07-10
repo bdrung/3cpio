@@ -682,8 +682,10 @@ impl Manifest {
                     archive.write(&mut stdout, source_date_epoch, log_level)?;
                 }
             } else {
-                let mut compressor = archive.compression.compress(file, source_date_epoch)?;
-                archive.write(&mut compressor, source_date_epoch, log_level)?;
+                let compressor = archive.compression.compress(file, source_date_epoch)?;
+                let mut writer = BufWriter::new(compressor);
+                archive.write(&mut writer, source_date_epoch, log_level)?;
+                writer.flush()?;
                 // TODO: Check that the compressed cpio is the last
                 break;
             }
