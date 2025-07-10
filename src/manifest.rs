@@ -1162,7 +1162,11 @@ mod tests {
     #[test]
     fn test_file_from_line_location_fifo() {
         let line = "/run/initctl";
-        let stat = symlink_metadata("/run/initctl").unwrap();
+        let stat = match symlink_metadata("/run/initctl") {
+            Ok(s) => s,
+            // This test expects a fifo like /run/initctl being present.
+            Err(_) => return,
+        };
         let mtime = stat.mtime().try_into().unwrap();
         let mut hardlinks = HashMap::new();
         let (file, umask) = File::from_line(line, &mut hardlinks).unwrap();
@@ -1177,7 +1181,11 @@ mod tests {
     #[test]
     fn test_file_from_line_location_socket() {
         let line = "/run/systemd/notify";
-        let stat = symlink_metadata("/run/systemd/notify").unwrap();
+        let stat = match symlink_metadata("/run/systemd/notify") {
+            Ok(s) => s,
+            // This test expects a socket like /run/systemd/notify being present.
+            Err(_) => return,
+        };
         let mtime = stat.mtime().try_into().unwrap();
         let mut hardlinks = HashMap::new();
         let (file, umask) = File::from_line(line, &mut hardlinks).unwrap();
