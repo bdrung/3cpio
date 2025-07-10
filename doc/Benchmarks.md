@@ -183,32 +183,61 @@ $ sudo 3cpio -x /boot/initrd.img -C initrd
 $ ( cd initrd && find . ) | sed -e 's,\./,,g' | sort > manifest
 $ wc -l < manifest
 2542
-$ sudo hyperfine -w 1 "3cpio -c initrd1.img -C initrd < manifest" "cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest" "cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest" --export-markdown create.md
-Benchmark 1: 3cpio -c initrd1.img -C initrd < manifest
-  Time (mean ± σ):     13.912 s ±  0.672 s    [User: 0.616 s, System: 4.999 s]
-  Range (min … max):   12.920 s … 15.476 s    10 runs
+$ sudo hyperfine -w 1 -p "rm -f initrd.img && sync && echo 3 > /proc/sys/vm/drop_caches" "3cpio -c initrd.img -C initrd < manifest" "cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest" "cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest" --export-markdown create-cold.md
+Benchmark 1: 3cpio -c initrd.img -C initrd < manifest
+  Time (mean ± σ):     10.743 s ±  0.213 s    [User: 0.140 s, System: 2.264 s]
+  Range (min … max):   10.470 s … 11.176 s    10 runs
 
-Benchmark 2: cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest
-  Time (mean ± σ):     12.414 s ±  0.418 s    [User: 0.553 s, System: 4.737 s]
-  Range (min … max):   11.846 s … 13.110 s    10 runs
+Benchmark 2: cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+  Time (mean ± σ):     12.200 s ±  0.339 s    [User: 0.576 s, System: 4.840 s]
+  Range (min … max):   11.603 s … 12.749 s    10 runs
 
-Benchmark 3: cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest
-  Time (mean ± σ):     12.594 s ±  0.276 s    [User: 0.838 s, System: 5.445 s]
-  Range (min … max):   12.296 s … 13.163 s    10 runs
+Benchmark 3: cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+  Time (mean ± σ):     12.154 s ±  0.502 s    [User: 0.839 s, System: 5.494 s]
+  Range (min … max):   11.549 s … 12.946 s    10 runs
 
 Summary
-  cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest ran
-    1.01 ± 0.04 times faster than cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest
-    1.12 ± 0.07 times faster than 3cpio -c initrd1.img -C initrd < manifest
+  3cpio -c initrd.img -C initrd < manifest ran
+    1.13 ± 0.05 times faster than cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+    1.14 ± 0.04 times faster than cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+$ sudo hyperfine -w 2 -p "rm -f initrd.img && sync" "3cpio -c initrd.img -C initrd < manifest" "cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest" "cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest" --export-markdown create-warm.md
+Benchmark 1: 3cpio -c initrd.img -C initrd < manifest
+  Time (mean ± σ):      2.460 s ±  0.192 s    [User: 0.103 s, System: 1.129 s]
+  Range (min … max):    2.266 s …  2.778 s    10 runs
+
+Benchmark 2: cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+  Time (mean ± σ):      3.733 s ±  0.013 s    [User: 0.453 s, System: 3.257 s]
+  Range (min … max):    3.716 s …  3.762 s    10 runs
+
+Benchmark 3: cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+  Time (mean ± σ):      4.833 s ±  0.009 s    [User: 0.737 s, System: 4.069 s]
+  Range (min … max):    4.821 s …  4.845 s    10 runs
+
+Summary
+  3cpio -c initrd.img -C initrd < manifest ran
+    1.52 ± 0.12 times faster than cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+    1.96 ± 0.15 times faster than cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+$ stat -c %s initrd.img
+80422400
 ```
+
+Cold caches:
 
 | Command | Mean [s] | Min [s] | Max [s] | Relative |
 |:---|---:|---:|---:|---:|
-| `3cpio -c initrd1.img -C initrd < manifest` | 13.912 ± 0.672 | 12.920 | 15.476 | 1.12 ± 0.07 |
-| `cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest` | 12.414 ± 0.418 | 11.846 | 13.110 | 1.00 |
-| `cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest` | 12.594 ± 0.276 | 12.296 | 13.163 | 1.01 ± 0.04 |
+| `3cpio -c initrd.img -C initrd < manifest` | 10.743 ± 0.213 | 10.470 | 11.176 | 1.00 |
+| `cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest` | 12.200 ± 0.339 | 11.603 | 12.749 | 1.14 ± 0.04 |
+| `cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest` | 12.154 ± 0.502 | 11.549 | 12.946 | 1.13 ± 0.05 |
 
-The manifest parsing in 3cpio took 135 ms. The remaining 13.777 s were spent creating the cpio archive.
+Warm caches (results rely heavily on the available amount of memory):
+
+| Command | Mean [s] | Min [s] | Max [s] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -c initrd.img -C initrd < manifest` | 2.460 ± 0.192 | 2.266 | 2.778 | 1.00 |
+| `cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest` | 3.733 ± 0.013 | 3.716 | 3.762 | 1.52 ± 0.12 |
+| `cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest` | 4.833 ± 0.009 | 4.821 | 4.845 | 1.96 ± 0.15 |
+
+The manifest parsing in 3cpio took 740 ms with a cold cache and 140 ms with a warm cache.
 
 AMD Ryzen 7 5700G
 -----------------
@@ -444,29 +473,125 @@ lrwxrwxrwx 1 root root       27 Jul  9 23:47 /boot/initrd.img -> initrd.img-6.8.
 (noble)root@desktop:~# ( cd initrd && find . ) | sed -e 's,\./,,g' | sort > manifest
 (noble)root@desktop:~# wc -l < manifest
 1901
-(noble)root@desktop:~# hyperfine -w 2 -r 100 "3cpio -c initrd1.img -C initrd < manifest" "cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest" "cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest" --export-markdown create.md
-Benchmark 1: 3cpio -c initrd1.img -C initrd < manifest
-  Time (mean ± σ):     225.0 ms ±   3.3 ms    [User: 19.3 ms, System: 205.6 ms]
-  Range (min … max):   218.0 ms … 231.4 ms    100 runs
+(noble)root@desktop:~# hyperfine -w 2 -r 100 -p "rm -f initrd.img && sync && echo 3 > /proc/sys/vm/drop_caches" "3cpio -c initrd.img -C initrd < manifest" "cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest" "cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest" --export-markdown create-cold.md
+Benchmark 1: 3cpio -c initrd.img -C initrd < manifest
+  Time (mean ± σ):      75.1 ms ±   4.3 ms    [User: 3.9 ms, System: 63.8 ms]
+  Range (min … max):    67.5 ms …  80.7 ms    100 runs
 
-Benchmark 2: cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest
-  Time (mean ± σ):     245.8 ms ±   2.9 ms    [User: 18.0 ms, System: 227.7 ms]
-  Range (min … max):   239.1 ms … 251.4 ms    100 runs
+Benchmark 2: cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+  Time (mean ± σ):     270.0 ms ±   6.5 ms    [User: 19.1 ms, System: 230.5 ms]
+  Range (min … max):   256.6 ms … 281.4 ms    100 runs
 
-Benchmark 3: cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest
-  Time (mean ± σ):     328.7 ms ±   3.9 ms    [User: 30.5 ms, System: 297.9 ms]
-  Range (min … max):   322.8 ms … 339.8 ms    100 runs
+Benchmark 3: cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+  Time (mean ± σ):     336.7 ms ±   5.0 ms    [User: 31.2 ms, System: 298.6 ms]
+  Range (min … max):   328.2 ms … 348.8 ms    100 runs
 
 Summary
-  3cpio -c initrd1.img -C initrd < manifest ran
-    1.09 ± 0.02 times faster than cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest
-    1.46 ± 0.03 times faster than cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest
+  3cpio -c initrd.img -C initrd < manifest ran
+    3.59 ± 0.22 times faster than cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+    4.48 ± 0.27 times faster than cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+(noble)root@desktop:~# hyperfine -w 2 -r 100 -p "rm -f initrd.img && sync" "3cpio -c initrd.img -C initrd < manifest" "cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest" "cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest" --export-markdown create-warm.md
+Benchmark 1: 3cpio -c initrd.img -C initrd < manifest
+  Time (mean ± σ):      60.8 ms ±   0.9 ms    [User: 3.9 ms, System: 56.9 ms]
+  Range (min … max):    58.5 ms …  62.5 ms    100 runs
+
+Benchmark 2: cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+  Time (mean ± σ):     237.2 ms ±   3.2 ms    [User: 18.3 ms, System: 218.8 ms]
+  Range (min … max):   231.6 ms … 244.8 ms    100 runs
+
+Benchmark 3: cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+  Time (mean ± σ):     322.5 ms ±   4.1 ms    [User: 29.6 ms, System: 292.8 ms]
+  Range (min … max):   315.4 ms … 336.1 ms    100 runs
+
+Summary
+  3cpio -c initrd.img -C initrd < manifest ran
+    3.90 ± 0.08 times faster than cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+    5.30 ± 0.10 times faster than cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+(noble)root@desktop:~# stat -c %s initrd.img
+83589120
 ```
+
+Cold cache:
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `3cpio -c initrd1.img -C initrd < manifest` | 225.0 ± 3.3 | 218.0 | 231.4 | 1.00 |
-| `cd initrd && bsdcpio -o -H newc > ../initrd2.img < ../manifest` | 245.8 ± 2.9 | 239.1 | 251.4 | 1.09 ± 0.02 |
-| `cd initrd && cpio -o -H newc --reproducible > ../initrd3.img < ../manifest` | 328.7 ± 3.9 | 322.8 | 339.8 | 1.46 ± 0.03 |
+| `3cpio -c initrd.img -C initrd < manifest` | 75.1 ± 4.3 | 67.5 | 80.7 | 1.00 |
+| `cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest` | 270.0 ± 6.5 | 256.6 | 281.4 | 3.59 ± 0.22 |
+| `cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest` | 336.7 ± 5.0 | 328.2 | 348.8 | 4.48 ± 0.27 |
 
-The manifest parsing in 3cpio took 6 ms. The remaining 219 ms were spent creating the cpio archive.
+Warm cache:
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -c initrd.img -C initrd < manifest` | 60.8 ± 0.9 | 58.5 | 62.5 | 1.00 |
+| `cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest` | 237.2 ± 3.2 | 231.6 | 244.8 | 3.90 ± 0.08 |
+| `cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest` | 322.5 ± 4.1 | 315.4 | 336.1 | 5.30 ± 0.10 |
+
+The manifest parsing in 3cpio took 21 ms with a cold cache and 6 ms with a warm cache.
+
+Benchmark results on a desktop machine with an AMD Ryzen 7 5700G running Ubuntu
+25.04 (plucky) on a Samsung SSD 980 PRO NMVe with Dracut on 2025-07-10:
+
+```
+$ ls -l /boot/initrd.img*
+lrwxrwxrwx 1 root root       28 Jul  2 11:35 /boot/initrd.img -> initrd.img-6.14.0-23-generic
+-rw------- 1 root root 28276693 Jul  4 09:58 /boot/initrd.img-6.14.0-23-generic
+$ sudo 3cpio -x /boot/initrd.img -C initrd
+$ ( cd initrd && find . ) | sed -e 's,\./,,g' | sort > manifest
+$ wc -l < manifest
+1714
+$ sudo hyperfine -w 1 -p "rm -f initrd.img && sync && echo 3 > /proc/sys/vm/drop_caches" "3cpio -c initrd.img -C initrd < manifest" "cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest" "cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest" --export-markdown create-cold.md
+Benchmark 1: 3cpio -c initrd.img -C initrd < manifest
+  Time (mean ± σ):     257.2 ms ±   3.4 ms    [User: 5.4 ms, System: 111.2 ms]
+  Range (min … max):   252.8 ms … 262.4 ms    10 runs
+
+Benchmark 2: cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+  Time (mean ± σ):     490.5 ms ±   5.8 ms    [User: 19.7 ms, System: 341.8 ms]
+  Range (min … max):   482.1 ms … 497.7 ms    10 runs
+
+Benchmark 3: cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+  Time (mean ± σ):     559.3 ms ±   6.3 ms    [User: 33.9 ms, System: 416.1 ms]
+  Range (min … max):   547.5 ms … 570.8 ms    10 runs
+
+Summary
+  3cpio -c initrd.img -C initrd < manifest ran
+    1.91 ± 0.03 times faster than cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+    2.17 ± 0.04 times faster than cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+$ sudo hyperfine -w 2 -p "rm -f initrd.img && sync" "3cpio -c initrd.img -C initrd < manifest" "cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest" "cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest" --export-markdown create-warm.md
+Benchmark 1: 3cpio -c initrd.img -C initrd < manifest
+  Time (mean ± σ):      65.1 ms ±   1.4 ms    [User: 3.6 ms, System: 61.4 ms]
+  Range (min … max):    63.1 ms …  68.2 ms    33 runs
+
+Benchmark 2: cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+  Time (mean ± σ):     298.8 ms ±   3.2 ms    [User: 16.0 ms, System: 282.7 ms]
+  Range (min … max):   295.6 ms … 304.3 ms    10 runs
+
+Benchmark 3: cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+  Time (mean ± σ):     382.6 ms ±   7.6 ms    [User: 30.8 ms, System: 351.7 ms]
+  Range (min … max):   370.2 ms … 393.2 ms    10 runs
+
+Summary
+  3cpio -c initrd.img -C initrd < manifest ran
+    4.59 ± 0.11 times faster than cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest
+    5.87 ± 0.17 times faster than cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest
+$ stat -c %s initrd.img
+68406784
+```
+
+Cold cache:
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -c initrd.img -C initrd < manifest` | 257.2 ± 3.4 | 252.8 | 262.4 | 1.00 |
+| `cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest` | 490.5 ± 5.8 | 482.1 | 497.7 | 1.91 ± 0.03 |
+| `cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest` | 559.3 ± 6.3 | 547.5 | 570.8 | 2.17 ± 0.04 |
+
+Warm cache:
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `3cpio -c initrd.img -C initrd < manifest` | 65.1 ± 1.4 | 63.1 | 68.2 | 1.00 |
+| `cd initrd && bsdcpio -o -H newc > ../initrd.img < ../manifest` | 298.8 ± 3.2 | 295.6 | 304.3 | 4.59 ± 0.11 |
+| `cd initrd && cpio -o -H newc --reproducible > ../initrd.img < ../manifest` | 382.6 ± 7.6 | 370.2 | 393.2 | 5.87 ± 0.17 |
+
+The manifest parsing in 3cpio took 40 ms with a cold cache and 5 ms with a warm cache.

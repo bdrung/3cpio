@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::fs::{symlink_metadata, Metadata};
-use std::io::{BufRead, Error, ErrorKind, Result, Write};
+use std::io::{BufRead, BufWriter, Error, ErrorKind, Result, Write};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 use crate::compression::Compression;
@@ -674,7 +674,9 @@ impl Manifest {
         for archive in self.archives {
             if archive.compression.is_uncompressed() {
                 if let Some(file) = file.as_mut() {
-                    archive.write(file, source_date_epoch, log_level)?;
+                    let mut writer = BufWriter::new(file);
+                    archive.write(&mut writer, source_date_epoch, log_level)?;
+                    writer.flush()?;
                 } else {
                     let mut stdout = std::io::stdout();
                     archive.write(&mut stdout, source_date_epoch, log_level)?;

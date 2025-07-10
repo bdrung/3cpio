@@ -205,11 +205,20 @@ Raw measurements can be found in [doc/Benchmarks.md](doc/Benchmarks.md).
 
 ### Creating cpio archives
 
-| System        | Distro | Kernel           | Size   | Files | 3cpio   | bsdcpio | cpio    |
-| ------------- | ------ | ---------------- | ------ | ----- | ------- | ------- | ------- |
-| Ryzen 7 5700G | noble  | 6.8.0-63-generic |  84 MB |  1901 |  0.225s |  0.246s |  0.329s |
-| RasPi Zero 2W | noble  | 6.8.0-1030-raspi |  80 MB |  2542 | 13.912s | 12.414s | 12.594s |
+3cpio is the fastest tool by far in all tested scenarios
+(the other tools are 1.13 to 4.48 times slower with a cold cache
+and 1.52 to 5.87 times slower with a warm cache):
 
+| System        | Distro | Kernel            | Size   | Cache | 3cpio   | bsdcpio | cpio    |
+| ------------- | ------ | ----------------- | ------ | ----- | ------- | ------- | ------- |
+| Ryzen 7 5700G | noble* | 6.8.0-63-generic  |  84 MB | warm  |  0.061s |  0.237s |  0.323s |
+| Ryzen 7 5700G | noble* | 6.8.0-63-generic  |  84 MB | cold  |  0.068s |  0.257s |  0.337s |
+| Ryzen 7 5700G | plucky | 6.14.0-23-generic |  68 MB | warm  |  0.065s |  0.299s |  0.383s |
+| Ryzen 7 5700G | plucky | 6.14.0-23-generic |  68 MB | cold  |  0.257s |  0.491s |  0.559s |
+| RasPi Zero 2W | noble  | 6.8.0-1030-raspi  |  80 MB | warm  |  2.460s |  3.733s |  4.833s |
+| RasPi Zero 2W | noble  | 6.8.0-1030-raspi  |  80 MB | cold  | 10.743s | 12.200s | 12.154s |
+
+The Ryzen 7 5700G noble tests were done in chroots with tmpfs.
 Raw measurements can be found in [doc/Benchmarks.md](doc/Benchmarks.md).
 
 Naming and alternatives
