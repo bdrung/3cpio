@@ -1060,6 +1060,8 @@ mod tests {
             // This test needs to run as root.
             return;
         }
+        let tempdir = TempDir::new().unwrap();
+        set_current_dir(&tempdir.path).unwrap();
         let mut header = Header::new(1, 0o20_644, 0, 0, 0, 1740402179, 0, 0, 0, "./null");
         header.rmajor = 1;
         header.rminor = 3;
@@ -1080,6 +1082,8 @@ mod tests {
     #[test]
     fn test_write_directory_with_setuid() {
         let _lock = TEST_LOCK.lock().unwrap();
+        let tempdir = TempDir::new().unwrap();
+        set_current_dir(&tempdir.path).unwrap();
         let mut mtimes = BTreeMap::new();
         let header = Header::new(
             1,
@@ -1110,6 +1114,8 @@ mod tests {
     #[test]
     fn test_write_file_with_setuid() {
         let _lock = TEST_LOCK.lock().unwrap();
+        let tempdir = TempDir::new().unwrap();
+        set_current_dir(&tempdir.path).unwrap();
         let mut seen_files = SeenFiles::new();
         let header = Header::new(
             1,
@@ -1146,6 +1152,8 @@ mod tests {
     #[test]
     fn test_write_symbolic_link() {
         let _lock = TEST_LOCK.lock().unwrap();
+        let tempdir = TempDir::new().unwrap();
+        set_current_dir(&tempdir.path).unwrap();
         let header = Header::new(
             1,
             0o120_777,
