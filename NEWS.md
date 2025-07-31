@@ -1,6 +1,16 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.8.0 (2025-07-31)
+------------------
+
+### Fixed
+
+* test:
+  - use temporary directory for write tests
+  - canonicalize `/dev/console`
+    ([bug #16](https://github.com/bdrung/3cpio/issues/16))
+
 0.8.0 (2025-07-11)
 ------------------
 
