@@ -727,7 +727,7 @@ pub fn write_padding<W: Write>(file: &mut W, written_bytes: u32) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::hard_link;
+    use std::fs::{canonicalize, hard_link};
     use std::path::PathBuf;
 
     use super::*;
@@ -1120,13 +1120,14 @@ mod tests {
 
     #[test]
     fn test_file_from_line_location_character_device() {
-        let line = "/dev/console";
-        let stat = symlink_metadata("/dev/console").unwrap();
+        let path = canonicalize("/dev/console").unwrap();
+        let line = path.clone().into_os_string().into_string().unwrap();
+        let stat = path.symlink_metadata().unwrap();
         let rdev = stat.rdev();
         let mode = (stat.mode() & MODE_PERMISSION_MASK).try_into().unwrap();
         let mtime = stat.mtime().try_into().unwrap();
         let mut hardlinks = HashMap::new();
-        let (file, umask) = File::from_line(line, &mut hardlinks).unwrap();
+        let (file, umask) = File::from_line(&line, &mut hardlinks).unwrap();
         assert_eq!(
             file,
             File::new(
@@ -1134,7 +1135,7 @@ mod tests {
                     major: major(rdev),
                     minor: minor(rdev)
                 },
-                "dev/console",
+                line.strip_prefix("/").unwrap(),
                 mode,
                 stat.uid(),
                 stat.gid(),
