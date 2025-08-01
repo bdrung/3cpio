@@ -1,15 +1,24 @@
 [package]
+edition = "2021"
 name = "threecpio"
 version = "0.8.1"
-edition = "2021"
 authors = ["Benjamin Drung <bdrung@posteo.de>"]
-license = "ISC"
-homepage = "https://github.com/bdrung/3cpio"
-repository = "https://github.com/bdrung/3cpio"
 description = "manage initrd cpio archives"
+homepage = "https://github.com/bdrung/3cpio"
 readme = "README.md"
-categories = ["command-line-utilities", "compression", "encoding", "filesystem"]
-keywords = ["archive", "cpio", "initrd"]
+keywords = [
+    "archive",
+    "cpio",
+    "initrd",
+]
+categories = [
+    "command-line-utilities",
+    "compression",
+    "encoding",
+    "filesystem",
+]
+license = "ISC"
+repository = "https://github.com/bdrung/3cpio"
 
 [[bin]]
 name = "3cpio"
