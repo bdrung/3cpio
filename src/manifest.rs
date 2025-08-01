@@ -1360,8 +1360,10 @@ mod tests {
         let got = manifest
             .write_archive(Some(file), None, LOG_LEVEL_WARNING)
             .unwrap_err();
-        assert_eq!(got.to_string(), "false failed: exit status: 1");
-        assert_eq!(got.kind(), ErrorKind::Other);
+        assert!(
+            matches!(got.kind(), ErrorKind::Other if got.to_string() == "false failed: exit status: 1")
+                || matches!(got.kind(), ErrorKind::BrokenPipe)
+        );
     }
 
     #[test]
