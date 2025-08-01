@@ -1,0 +1,6 @@
+[env]
+# Needed because cpio timestamsp are unsigned 32-bit
+# This approach is based off the very recent libc work at
+# https://github.com/rust-lang/libc/pull/4433
+# This should probably be revisited once they solve this properly (if ever)
+RUST_LIBC_UNSTABLE_GNU_TIME_BITS = "64"
