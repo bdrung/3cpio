@@ -66,6 +66,7 @@ where
 
 trait OutputContainsAssertion {
     fn assert_stderr_contains(self, expected: &str) -> Self;
+    fn assert_stdout_contains(self, expected: &str) -> Self;
 }
 
 impl OutputContainsAssertion for Output {
@@ -74,6 +75,15 @@ impl OutputContainsAssertion for Output {
         assert!(
             stderr.contains(expected),
             "'{expected}' not found in '{stderr}'",
+        );
+        self
+    }
+
+    fn assert_stdout_contains(self, expected: &str) -> Self {
+        let stdout = String::from_utf8(self.stdout.clone()).expect("stdout");
+        assert!(
+            stdout.contains(expected),
+            "'{expected}' not found in '{stdout}'",
         );
         self
     }
@@ -175,6 +185,18 @@ fn examine_single_cpio() -> Result<(), Box<dyn Error>> {
     cmd.arg("-e").arg("tests/single.cpio");
 
     cmd.output()?.assert_success().assert_stdout("0\tcpio\n");
+    Ok(())
+}
+
+#[test]
+fn test_help() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("--help");
+
+    cmd.output()?
+        .assert_stderr("")
+        .assert_success()
+        .assert_stdout_contains("Extract the cpio archives into separate directories");
     Ok(())
 }
 
