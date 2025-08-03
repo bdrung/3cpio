@@ -144,6 +144,18 @@ fn count_cpio_archives() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_count_unexpected_argument() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("--count").arg("tests/single.cpio").arg("foobar");
+
+    cmd.output()?
+        .assert_failure(2)
+        .assert_stderr_contains("Error: unexpected argument \"foobar\"")
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
 fn examine_compressed_cpio() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzop", "xz", "zstd"] {
         let mut cmd = get_command();
@@ -232,5 +244,17 @@ fn print_version() -> Result<(), Box<dyn Error>> {
     let mut matches = String::from(version);
     matches.retain(|c| c.is_ascii_digit() || c == '.');
     assert_eq!(matches, version);
+    Ok(())
+}
+
+#[test]
+fn test_unexpected_option() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("--foobar");
+
+    cmd.output()?
+        .assert_failure(2)
+        .assert_stderr_contains("Error: invalid option '--foobar'")
+        .assert_stdout("");
     Ok(())
 }
