@@ -90,7 +90,7 @@ impl OutputContainsAssertion for Output {
 }
 
 #[test]
-fn create_cpio_on_stdout() -> Result<(), Box<dyn Error>> {
+fn test_create_cpio_on_stdout() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--create");
     let mut process = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
@@ -114,7 +114,7 @@ fn create_cpio_on_stdout() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn create_cpio_file() -> Result<(), Box<dyn Error>> {
+fn test_create_cpio_file() -> Result<(), Box<dyn Error>> {
     let mut path = temp_dir();
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -145,7 +145,7 @@ fn create_cpio_file() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn count_cpio_archives() -> Result<(), Box<dyn Error>> {
+fn test_count_cpio_archives() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--count").arg("tests/zstd.cpio");
 
@@ -166,7 +166,7 @@ fn test_count_unexpected_argument() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn examine_compressed_cpio() -> Result<(), Box<dyn Error>> {
+fn test_examine_compressed_cpio() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzop", "xz", "zstd"] {
         let mut cmd = get_command();
         cmd.arg("-e").arg(format!("tests/{compression}.cpio"));
@@ -180,7 +180,7 @@ fn examine_compressed_cpio() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn examine_single_cpio() -> Result<(), Box<dyn Error>> {
+fn test_examine_single_cpio() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-e").arg("tests/single.cpio");
 
@@ -201,7 +201,7 @@ fn test_help() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn archive_doesnt_exist() -> Result<(), Box<dyn Error>> {
+fn test_archive_doesnt_exist() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-t").arg("test/file/does/not/exist");
 
@@ -213,7 +213,7 @@ fn archive_doesnt_exist() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn invalid_pattern() -> Result<(), Box<dyn Error>> {
+fn test_invalid_pattern() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-t").arg("tests/single.cpio").arg("[abc.txt");
 
@@ -225,7 +225,7 @@ fn invalid_pattern() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
+fn test_list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzma", "lzop", "xz", "zstd"] {
         let mut cmd = get_command();
         cmd.arg("-t").arg(format!("tests/{compression}.cpio"));
@@ -239,7 +239,7 @@ fn list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn list_content_single_cpio() -> Result<(), Box<dyn Error>> {
+fn test_list_content_single_cpio() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-t").arg("tests/single.cpio");
 
@@ -251,7 +251,7 @@ fn list_content_single_cpio() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn list_content_single_cpio_with_pattern() -> Result<(), Box<dyn Error>> {
+fn test_list_content_single_cpio_with_pattern() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-t").arg("tests/single.cpio").arg("p?th");
 
@@ -263,7 +263,7 @@ fn list_content_single_cpio_with_pattern() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn missing_archive_argument() -> Result<(), Box<dyn Error>> {
+fn test_missing_archive_argument() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-t");
 
@@ -275,7 +275,7 @@ fn missing_archive_argument() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn print_version() -> Result<(), Box<dyn Error>> {
+fn test_print_version() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--version");
 
