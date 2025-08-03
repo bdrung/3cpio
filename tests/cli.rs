@@ -191,6 +191,18 @@ fn archive_doesnt_exist() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn invalid_pattern() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("-t").arg("tests/single.cpio").arg("[abc.txt");
+
+    cmd.output()?
+        .assert_failure(2)
+        .assert_stderr_contains("Error: invalid pattern '[abc.txt'")
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
 fn list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzma", "lzop", "xz", "zstd"] {
         let mut cmd = get_command();
@@ -213,6 +225,18 @@ fn list_content_single_cpio() -> Result<(), Box<dyn Error>> {
         .assert_stderr("")
         .assert_success()
         .assert_stdout(".\npath\npath/file\n");
+    Ok(())
+}
+
+#[test]
+fn list_content_single_cpio_with_pattern() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("-t").arg("tests/single.cpio").arg("p?th");
+
+    cmd.output()?
+        .assert_stderr("")
+        .assert_success()
+        .assert_stdout("path\n");
     Ok(())
 }
 

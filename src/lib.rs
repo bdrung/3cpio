@@ -14,6 +14,8 @@ use std::os::unix::fs::{chown, fchown, lchown, symlink};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use glob::Pattern;
+
 use crate::compression::Compression;
 use crate::filetype::*;
 use crate::header::Header;
@@ -182,11 +184,14 @@ fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Compression>
 fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
     archive: &mut R,
     out: &mut W,
+    patterns: &Vec<Pattern>,
 ) -> Result<()> {
     let cpio = CpioFilenameReader { archive };
     for f in cpio {
         let filename = f?;
-        writeln!(out, "{filename}")?;
+        if patterns.is_empty() || filename_matches(&filename, patterns) {
+            writeln!(out, "{filename}")?;
+        }
     }
     Ok(())
 }
@@ -194,6 +199,7 @@ fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
 fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
     archive: &mut R,
     out: &mut W,
+    patterns: &Vec<Pattern>,
     now: i64,
     user_group_cache: &mut UserGroupCache,
     print_ino: bool,
@@ -213,6 +219,11 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
             }
             Err(e) => return Err(e),
         };
+
+        if !patterns.is_empty() && !filename_matches(&header.filename, patterns) {
+            header.skip_file_content(archive)?;
+            continue;
+        }
 
         let user = match user_group_cache.get_user(header.uid)? {
             Some(name) => name,
@@ -532,9 +543,20 @@ fn check_path_is_canonical_subdir<S: AsRef<str> + std::fmt::Display>(
     Ok(canonicalized_path)
 }
 
+// Does the given file name matches one of the globbing patterns?
+fn filename_matches(filename: &str, patterns: &Vec<Pattern>) -> bool {
+    for pattern in patterns {
+        if pattern.matches(filename) {
+            return true;
+        }
+    }
+    false
+}
+
 fn read_cpio_and_extract<R: Read + SeekForward>(
     archive: &mut R,
     base_dir: &PathBuf,
+    patterns: &Vec<Pattern>,
     preserve_permissions: bool,
     log_level: u32,
 ) -> Result<()> {
@@ -554,7 +576,14 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
 
         if log_level >= LOG_LEVEL_DEBUG {
             writeln!(std::io::stderr(), "{header:?}")?;
-        } else if log_level >= LOG_LEVEL_INFO {
+        }
+
+        if !patterns.is_empty() && !filename_matches(&header.filename, patterns) {
+            header.skip_file_content(archive)?;
+            continue;
+        }
+
+        if log_level >= LOG_LEVEL_INFO {
             writeln!(std::io::stderr(), "{}", header.filename)?;
         }
 
@@ -698,6 +727,7 @@ pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<
 
 pub fn extract_cpio_archive(
     mut archive: File,
+    patterns: Vec<Pattern>,
     preserve_permissions: bool,
     subdir: Option<String>,
     log_level: u32,
@@ -716,10 +746,22 @@ pub fn extract_cpio_archive(
             Some(x) => x?,
         };
         if compression.is_uncompressed() {
-            read_cpio_and_extract(&mut archive, &dir, preserve_permissions, log_level)?;
+            read_cpio_and_extract(
+                &mut archive,
+                &dir,
+                &patterns,
+                preserve_permissions,
+                log_level,
+            )?;
         } else {
             let mut decompressed = compression.decompress(archive)?;
-            read_cpio_and_extract(&mut decompressed, &dir, preserve_permissions, log_level)?;
+            read_cpio_and_extract(
+                &mut decompressed,
+                &dir,
+                &patterns,
+                preserve_permissions,
+                log_level,
+            )?;
             break;
         }
         count += 1;
@@ -727,7 +769,12 @@ pub fn extract_cpio_archive(
     Ok(())
 }
 
-pub fn list_cpio_content<W: Write>(mut archive: File, out: &mut W, log_level: u32) -> Result<()> {
+pub fn list_cpio_content<W: Write>(
+    mut archive: File,
+    out: &mut W,
+    patterns: &Vec<Pattern>,
+    log_level: u32,
+) -> Result<()> {
     let mut user_group_cache = UserGroupCache::new();
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -745,12 +792,13 @@ pub fn list_cpio_content<W: Write>(mut archive: File, out: &mut W, log_level: u3
                 read_cpio_and_print_long_format(
                     &mut archive,
                     out,
+                    patterns,
                     now,
                     &mut user_group_cache,
                     log_level >= LOG_LEVEL_DEBUG,
                 )?;
             } else {
-                read_cpio_and_print_filenames(&mut archive, out)?;
+                read_cpio_and_print_filenames(&mut archive, out, patterns)?;
             }
         } else {
             let mut decompressed = compression.decompress(archive)?;
@@ -758,12 +806,13 @@ pub fn list_cpio_content<W: Write>(mut archive: File, out: &mut W, log_level: u3
                 read_cpio_and_print_long_format(
                     &mut decompressed,
                     out,
+                    patterns,
                     now,
                     &mut user_group_cache,
                     log_level >= LOG_LEVEL_DEBUG,
                 )?;
             } else {
-                read_cpio_and_print_filenames(&mut decompressed, out)?;
+                read_cpio_and_print_filenames(&mut decompressed, out, patterns)?;
             }
             break;
         }
@@ -853,8 +902,14 @@ mod tests {
         let mut archive = File::open("tests/path-traversal.cpio").unwrap();
         let tempdir = TempDir::new().unwrap();
         set_current_dir(&tempdir.path).unwrap();
-        let got = read_cpio_and_extract(&mut archive, &tempdir.path, false, LOG_LEVEL_WARNING)
-            .unwrap_err();
+        let got = read_cpio_and_extract(
+            &mut archive,
+            &tempdir.path,
+            &Vec::new(),
+            false,
+            LOG_LEVEL_WARNING,
+        )
+        .unwrap_err();
         assert_eq!(got.kind(), ErrorKind::InvalidData);
         assert_eq!(got.to_string(), format!(
             "The parent directory of \"tmp/trav.txt\" (resolved to \"/tmp\") is not within the directory {:#?}.",
@@ -893,9 +948,60 @@ mod tests {
         let archive = File::open("tests/single.cpio").unwrap();
         let tempdir = TempDir::new().unwrap();
         set_current_dir(&tempdir.path).unwrap();
-        extract_cpio_archive(archive, false, Some("cpio".into()), LOG_LEVEL_WARNING).unwrap();
+        extract_cpio_archive(
+            archive,
+            Vec::new(),
+            false,
+            Some("cpio".into()),
+            LOG_LEVEL_WARNING,
+        )
+        .unwrap();
         let path = tempdir.path.join("cpio1/path/file");
         assert!(path.exists());
+    }
+
+    #[test]
+    fn test_extract_cpio_archive_copressed_with_pattern() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let archive = File::open("tests/zstd.cpio").unwrap();
+        let tempdir = TempDir::new().unwrap();
+        let patterns = vec![Pattern::new("p?th").unwrap()];
+        set_current_dir(&tempdir.path).unwrap();
+        extract_cpio_archive(archive, patterns, false, None, LOG_LEVEL_WARNING).unwrap();
+        assert!(tempdir.path.join("path").is_dir());
+        assert!(!tempdir.path.join("path/file").exists());
+    }
+
+    #[test]
+    fn test_extract_cpio_archive_uncopressed_with_pattern() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let archive = File::open("tests/single.cpio").unwrap();
+        let tempdir = TempDir::new().unwrap();
+        let patterns = vec![Pattern::new("path").unwrap()];
+        set_current_dir(&tempdir.path).unwrap();
+        extract_cpio_archive(archive, patterns, false, None, LOG_LEVEL_WARNING).unwrap();
+        assert!(tempdir.path.join("path").is_dir());
+        assert!(!tempdir.path.join("path/file").exists());
+    }
+
+    #[test]
+    fn test_list_cpio_content_compressed_with_pattern() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let archive = File::open("tests/xz.cpio").unwrap();
+        let patterns = vec![Pattern::new("p?th").unwrap()];
+        let mut output = Vec::new();
+        list_cpio_content(archive, &mut output, &patterns, LOG_LEVEL_WARNING).unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), "path\n");
+    }
+
+    #[test]
+    fn test_list_cpio_content_uncompressed_with_pattern() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let archive = File::open("tests/single.cpio").unwrap();
+        let patterns = vec![Pattern::new("*/file").unwrap()];
+        let mut output = Vec::new();
+        list_cpio_content(archive, &mut output, &patterns, LOG_LEVEL_WARNING).unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), "path/file\n");
     }
 
     #[test]
@@ -928,6 +1034,7 @@ mod tests {
         read_cpio_and_print_long_format(
             &mut archive.as_ref(),
             &mut output,
+            &Vec::new(),
             1728486311,
             &mut user_group_cache,
             false,
@@ -956,6 +1063,7 @@ mod tests {
         read_cpio_and_print_long_format(
             &mut archive.as_ref(),
             &mut output,
+            &Vec::new(),
             1722389471,
             &mut user_group_cache,
             false,
@@ -985,6 +1093,7 @@ mod tests {
         read_cpio_and_print_long_format(
             &mut archive.as_ref(),
             &mut output,
+            &Vec::new(),
             1722645915,
             &mut user_group_cache,
             false,
@@ -993,6 +1102,39 @@ mod tests {
         assert_eq!(
             String::from_utf8(output).unwrap(),
             "-rw-r--r--   1 user     2000           65 Jul 26 04:38 conf/modules\n"
+        );
+    }
+
+    #[test]
+    fn test_read_cpio_and_print_long_format_pattern() {
+        // Wrapped before mtime and filename
+        let archive = b"070701000036E4000081A4000003E8000007D000000001\
+        66A3285300000041000000000000002400000000000000000000000D00000000\
+        conf/modules\0\0\
+        linear\nmultipath\nraid0\nraid1\nraid456\nraid5\nraid6\nraid10\nefivarfs\0\0\0\0\
+        0707010000000D0000A1FF000000000000000000000001\
+        6237389400000007000000000000000000000000000000000000000400000000\
+        bin\0\0\0usr/bin\0\
+        0707010000000000000000000000000000000000000001\
+        0000000000000000000000000000000000000000000000000000000B00000000\
+        TRAILER!!!\0\0\0\0";
+        let mut output = Vec::new();
+        let mut user_group_cache = UserGroupCache::new();
+        user_group_cache.insert_test_data();
+        env::set_var("TZ", "UTC");
+        unsafe { tzset() };
+        read_cpio_and_print_long_format(
+            &mut archive.as_ref(),
+            &mut output,
+            &vec![Pattern::new("bin").unwrap()],
+            1722645915,
+            &mut user_group_cache,
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "lrwxrwxrwx   1 root     root            7 Mar 20  2022 bin -> usr/bin\n"
         );
     }
 
@@ -1011,6 +1153,7 @@ mod tests {
         read_cpio_and_print_long_format(
             &mut archive.as_ref(),
             &mut output,
+            &Vec::new(),
             1722645915,
             &mut user_group_cache,
             false,
@@ -1039,6 +1182,7 @@ mod tests {
         read_cpio_and_print_long_format(
             &mut archive.as_ref(),
             &mut output,
+            &Vec::new(),
             1722645915,
             &mut user_group_cache,
             true,

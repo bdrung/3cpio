@@ -25,5 +25,6 @@ name = "3cpio"
 path = "src/main.rs"
 
 [dependencies]
+glob = "0.3"
 libc = "0.2.173"
 lexopt = "0.3"

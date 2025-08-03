@@ -18,10 +18,10 @@ Benjamin Drung
 
 *3cpio* {*-e*|*--examine*} _ARCHIVE_
 
-*3cpio* {*-t*|*--list*} [*-v*|*--debug*] _ARCHIVE_
+*3cpio* {*-t*|*--list*} [*-v*|*--debug*] _ARCHIVE_ [_pattern_...]
 
 *3cpio* {*-x*|*--extract*} [*-v*|*--debug*] [*-C* _DIR_] [*-p*] [*-s* _NAME_]
-[*--force*] _ARCHIVE_
+[*--force*] _ARCHIVE_ [_pattern_...]
 
 *3cpio* {*-V*|*--version*}
 
@@ -55,13 +55,19 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
 *-e*, *--examine* _ARCHIVE_::
   List the offsets of the cpio archives and their compression.
 
-*-t*, *--list* _ARCHIVE_::
+*-t*, *--list* _ARCHIVE_ [_pattern_...]::
   List the contents of the cpio archives. By default only the file names are printed.
   If *--verbose* is specified, the long listing format is used (similar to ls --long).
   If *--debug* is specified, the inode is printed in addition to the long format.
+  If one or more __pattern__s are supplied, list only file names
+  matching at least one of those __pattern__s.
+  These __pattern__s are shell wildcard patterns (see *glob*(7)).
 
-*-x*, *--extract* _ARCHIVE_::
+*-x*, *--extract* _ARCHIVE_ [_pattern_...]::
   Extract cpio archives.
+  If one or more __pattern__s are supplied, extract only files
+  matching at least one of those __pattern__s.
+  These __pattern__s are shell wildcard patterns (see *glob*(7)).
 
 *-V*, *--version*::
   Print version number.

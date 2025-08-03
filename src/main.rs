@@ -7,6 +7,7 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::process::ExitCode;
 
+use glob::Pattern;
 use lexopt::prelude::*;
 
 use threecpio::{
@@ -25,6 +26,7 @@ struct Args {
     list: bool,
     log_level: u32,
     archive: Option<String>,
+    patterns: Vec<Pattern>,
     preserve_permissions: bool,
     subdir: Option<String>,
 }
@@ -76,7 +78,9 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     let mut log_level = LOG_LEVEL_WARNING;
     let mut directory = ".".into();
     let mut archive = None;
+    let mut patterns = Vec::new();
     let mut subdir: Option<String> = None;
+    let mut arguments = Vec::new();
     let mut parser = lexopt::Parser::from_env();
     while let Some(arg) = parser.next()? {
         match arg {
@@ -126,6 +130,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
             Value(val) if archive.is_none() => {
                 archive = Some(val.string()?);
             }
+            Value(val) => arguments.push(val.string()?),
             _ => return Err(arg.unexpected()),
         }
     }
@@ -134,6 +139,17 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         return Err(
             "Either --count, --create, --examine, --extract, or --list must be specified!".into(),
         );
+    }
+
+    if extract + list == 1 {
+        for argument in arguments {
+            let pattern = Pattern::new(&argument)
+                .map_err(|e| format!("invalid pattern '{argument}': {e}"))?;
+            patterns.push(pattern);
+        }
+    } else if !arguments.is_empty() {
+        let first = &arguments[0];
+        return Err(Value(first.into()).unexpected());
     }
 
     if let Some(ref s) = subdir {
@@ -156,6 +172,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         list: list == 1,
         log_level,
         archive,
+        patterns,
         preserve_permissions,
         subdir,
     })
@@ -282,6 +299,7 @@ fn main() -> ExitCode {
             "extract content",
             extract_cpio_archive(
                 archive,
+                args.patterns,
                 args.preserve_permissions,
                 args.subdir,
                 args.log_level,
@@ -290,7 +308,7 @@ fn main() -> ExitCode {
     } else if args.list {
         (
             "list content",
-            list_cpio_content(archive, &mut stdout, args.log_level),
+            list_cpio_content(archive, &mut stdout, &args.patterns, args.log_level),
         )
     } else {
         unreachable!("no operation specified");
