@@ -195,6 +195,9 @@ SOURCE_DATE_EPOCH::
 *1*::
   Failure.
 
+*2*::
+  Failure during command line argument parsing.
+
 == Examples
 
 List the number of cpio archives that an initramfs file contains:
