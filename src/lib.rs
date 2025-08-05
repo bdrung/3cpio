@@ -5,11 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs::{
     create_dir, hard_link, remove_file, set_permissions, symlink_metadata, File, OpenOptions,
 };
-use std::io::prelude::*;
-use std::io::Error;
-use std::io::ErrorKind;
-use std::io::Result;
-use std::io::SeekFrom;
+use std::io::{prelude::*, Error, ErrorKind, Result, SeekFrom};
 use std::os::unix::fs::{chown, fchown, lchown, symlink};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
