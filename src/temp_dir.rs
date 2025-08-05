@@ -15,14 +15,8 @@ impl TempDir {
     pub fn new() -> Result<Self> {
         // Use some very pseudo-random number
         let cwd = current_dir()?;
-        let epoch = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap();
-        let name = std::option_env!("CARGO_PKG_NAME").unwrap();
-        let dir_builder = std::fs::DirBuilder::new();
-        let mut path = env::temp_dir();
-        path.push(format!("{name}-{}", epoch.subsec_nanos()));
-        dir_builder.create(&path).map(|_| Self { path, cwd })
+        let path = create_tempdir()?;
+        Ok(Self { path, cwd })
     }
 }
 
@@ -31,4 +25,17 @@ impl Drop for TempDir {
         let _ = set_current_dir(&self.cwd);
         let _ = std::fs::remove_dir_all(&self.path);
     }
+}
+
+fn create_tempdir() -> Result<PathBuf> {
+    // Use some very pseudo-random number
+    let epoch = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
+    let name = std::option_env!("CARGO_PKG_NAME").unwrap();
+    let dir_builder = std::fs::DirBuilder::new();
+    let mut path = env::temp_dir();
+    path.push(format!("{name}-{}", epoch.subsec_nanos()));
+    dir_builder.create(&path)?;
+    Ok(path)
 }
