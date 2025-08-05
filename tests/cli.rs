@@ -8,6 +8,8 @@ use std::io::{Read, Write};
 use std::process::{Command, Output, Stdio};
 use std::time::SystemTime;
 
+use threecpio::temp_dir::TempDir;
+
 // Derive target directory (e.g. `target/debug`) from current executable
 fn get_target_dir() -> std::path::PathBuf {
     let mut path = env::current_exe().expect("env::current_exe not set");
@@ -200,6 +202,28 @@ fn test_extract_to_stdout() -> Result<(), Box<dyn Error>> {
         .assert_stderr("")
         .assert_success()
         .assert_stdout("content\n");
+    Ok(())
+}
+
+#[test]
+fn test_extract_with_subdir() -> Result<(), Box<dyn Error>> {
+    let tempdir = TempDir::new()?;
+    let mut cmd = get_command();
+    cmd.arg("-x")
+        .arg("-C")
+        .arg(&tempdir.path)
+        .arg("-s")
+        .arg("subdir")
+        .arg("-v")
+        .arg("tests/lz4.cpio");
+
+    println!("tempdir = {:?}", tempdir.path);
+    cmd.output()?
+        .assert_stderr(".\npath\npath/file\n.\nusr\nusr/bin\nusr/bin/sh\n")
+        .assert_success()
+        .assert_stdout("");
+    assert!(tempdir.path.join("subdir1/path/file").exists());
+    assert!(tempdir.path.join("subdir2/usr/bin/sh").exists());
     Ok(())
 }
 
