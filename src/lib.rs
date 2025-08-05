@@ -26,6 +26,7 @@ mod header;
 mod libc;
 mod manifest;
 mod seek_forward;
+pub mod temp_dir;
 
 pub const LOG_LEVEL_WARNING: u32 = 5;
 pub const LOG_LEVEL_INFO: u32 = 7;
@@ -860,12 +861,13 @@ pub fn list_cpio_content<W: Write>(
 
 #[cfg(test)]
 mod tests {
-    use std::env::{self, current_dir, set_current_dir};
+    use std::env::{self, set_current_dir};
     use std::io::Stdout;
     use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 
     use super::*;
     use crate::libc::{major, minor};
+    use crate::temp_dir::TempDir;
 
     // Lock for tests that rely on / change the current directory
     pub static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
@@ -880,33 +882,6 @@ mod tests {
 
     extern "C" {
         fn tzset();
-    }
-
-    struct TempDir {
-        path: PathBuf,
-        cwd: PathBuf,
-    }
-
-    impl TempDir {
-        fn new() -> Result<Self> {
-            // Use some very pseudo-random number
-            let cwd = current_dir()?;
-            let epoch = SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap();
-            let name = std::option_env!("CARGO_PKG_NAME").unwrap();
-            let dir_builder = std::fs::DirBuilder::new();
-            let mut path = env::temp_dir();
-            path.push(format!("{name}-{}", epoch.subsec_nanos()));
-            dir_builder.create(&path).map(|_| Self { path, cwd })
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = set_current_dir(&self.cwd);
-            let _ = std::fs::remove_dir_all(&self.path);
-        }
     }
 
     impl UserGroupCache {
