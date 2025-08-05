@@ -388,6 +388,23 @@ fn from_mtime(mtime: u32) -> SystemTime {
     std::time::UNIX_EPOCH + std::time::Duration::from_secs(mtime.into())
 }
 
+fn write_file_content<R: Read + SeekForward, W: Write>(
+    archive: &mut R,
+    output_file: &mut W,
+    header: &Header,
+) -> Result<()> {
+    let mut reader = archive.take(header.filesize.into());
+    let written = std::io::copy(&mut reader, output_file)?;
+    if written != header.filesize.into() {
+        return Err(Error::other(format!(
+            "Wrong amound of bytes written to '{}': {} != {}.",
+            header.filename, written, header.filesize
+        )));
+    }
+    let skip = align_to_4_bytes(header.filesize);
+    archive.seek_forward(skip.into())
+}
+
 fn write_file<R: Read + SeekForward>(
     archive: &mut R,
     header: &Header,
@@ -442,18 +459,9 @@ fn write_file<R: Read + SeekForward>(
         file = File::create(&header.filename)?
     };
     header.mark_seen(seen_files);
-    let mut reader = archive.take(header.filesize.into());
     // TODO: check writing hard-link with length == 0
     // TODO: check overwriting existing files/hardlinks
-    let written = std::io::copy(&mut reader, &mut file)?;
-    if written != header.filesize.into() {
-        return Err(Error::other(format!(
-            "Wrong amound of bytes written to '{}': {} != {}.",
-            header.filename, written, header.filesize
-        )));
-    }
-    let skip = align_to_4_bytes(header.filesize);
-    archive.seek_forward(skip.into())?;
+    write_file_content(archive, &mut file, header)?;
     if preserve_permissions {
         fchown(&file, Some(header.uid), Some(header.gid))?;
     }
