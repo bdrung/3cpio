@@ -38,8 +38,8 @@ fn print_help() {
     {executable} --count ARCHIVE
     {executable} {{-c|--create}} [-v|--debug] [-C DIR] [ARCHIVE] < manifest
     {executable} {{-e|--examine}} ARCHIVE
-    {executable} {{-t|--list}} [-v|--debug] ARCHIVE
-    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--force] ARCHIVE
+    {executable} {{-t|--list}} [-v|--debug] ARCHIVE [pattern...]
+    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--force] ARCHIVE [pattern...]
 
 Optional arguments:
   --count        Print the number of concatenated cpio archives.
