@@ -21,7 +21,7 @@ Benjamin Drung
 *3cpio* {*-t*|*--list*} [*-v*|*--debug*] _ARCHIVE_ [_pattern_...]
 
 *3cpio* {*-x*|*--extract*} [*-v*|*--debug*] [*-C* _DIR_] [*-p*] [*-s* _NAME_]
-[*--force*] _ARCHIVE_ [_pattern_...]
+[*--to-stdout*] [*--force*] _ARCHIVE_ [_pattern_...]
 
 *3cpio* {*-V*|*--version*}
 
@@ -90,6 +90,12 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
   Extract the cpio archives into separate sub-directories (using the given
   _NAME_ plus an incrementing number). This option is only taken into account
   in the *--extract* mode.
+
+*--to-stdout*::
+  Extract files to standard output. Only the content of the files will be written
+  to stdout.
+  Directories and symlinks will be ignored.
+  This option is only taken into account in the *--extract* mode.
 
 *-v*, *--verbose*::
   Verbose output. This option is only taken into account in the *--extract* and

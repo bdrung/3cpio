@@ -29,6 +29,7 @@ struct Args {
     patterns: Vec<Pattern>,
     preserve_permissions: bool,
     subdir: Option<String>,
+    to_stdout: bool,
 }
 
 fn print_help() {
@@ -39,7 +40,7 @@ fn print_help() {
     {executable} {{-c|--create}} [-v|--debug] [-C DIR] [ARCHIVE] < manifest
     {executable} {{-e|--examine}} ARCHIVE
     {executable} {{-t|--list}} [-v|--debug] ARCHIVE [pattern...]
-    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--force] ARCHIVE [pattern...]
+    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--to-stdout] [--force] ARCHIVE [pattern...]
 
 Optional arguments:
   --count        Print the number of concatenated cpio archives.
@@ -53,6 +54,7 @@ Optional arguments:
                  archive (default for superuser).
   -s, --subdir   Extract the cpio archives into separate directories (using the
                  given name plus an incrementing number)
+  --to-stdout    Extract files to standard output
   -v, --verbose  Verbose output
   --debug        Debug output
   --force        Force overwriting existing files
@@ -80,6 +82,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     let mut archive = None;
     let mut patterns = Vec::new();
     let mut subdir: Option<String> = None;
+    let mut to_stdout = false;
     let mut arguments = Vec::new();
     let mut parser = lexopt::Parser::from_env();
     while let Some(arg) = parser.next()? {
@@ -114,6 +117,9 @@ fn parse_args() -> Result<Args, lexopt::Error> {
             }
             Short('t') | Long("list") => {
                 list = 1;
+            }
+            Long("to-stdout") => {
+                to_stdout = true;
             }
             Short('v') | Long("verbose") => {
                 if log_level <= LOG_LEVEL_INFO {
@@ -175,6 +181,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         patterns,
         preserve_permissions,
         subdir,
+        to_stdout,
     })
 }
 
@@ -276,7 +283,7 @@ fn main() -> ExitCode {
         }
     };
 
-    if args.extract {
+    if args.extract && !args.to_stdout {
         if let Err(e) = create_and_set_current_dir(&args.directory, args.force) {
             eprintln!("{executable}: Error: {e}");
             return ExitCode::FAILURE;
@@ -302,6 +309,7 @@ fn main() -> ExitCode {
                 args.patterns,
                 args.preserve_permissions,
                 args.subdir,
+                args.to_stdout.then_some(&mut stdout),
                 args.log_level,
             ),
         )

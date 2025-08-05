@@ -561,11 +561,12 @@ fn filename_matches(filename: &str, patterns: &Vec<Pattern>) -> bool {
     false
 }
 
-fn read_cpio_and_extract<R: Read + SeekForward>(
+fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
     archive: &mut R,
     base_dir: &PathBuf,
     patterns: &Vec<Pattern>,
     preserve_permissions: bool,
+    out: &mut Option<W>,
     log_level: u32,
 ) -> Result<()> {
     let mut extractor = Extractor::new();
@@ -595,7 +596,7 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
             writeln!(std::io::stderr(), "{}", header.filename)?;
         }
 
-        if !header.is_root_directory() {
+        if out.is_none() && !header.is_root_directory() {
             let absdir = absolute_parent_directory(&header.filename, base_dir)?;
             // canonicalize() is an expensive call. So cache the previously resolved
             // parent directory. Skip the path traversal check in case the absolute
@@ -606,40 +607,70 @@ fn read_cpio_and_extract<R: Read + SeekForward>(
             }
         }
 
-        match header.mode & MODE_FILETYPE_MASK {
-            FILETYPE_CHARACTER_DEVICE => {
-                write_character_device(&header, preserve_permissions, log_level)?
+        if let Some(out) = out {
+            if header.filesize == 0 {
+                continue;
             }
-            FILETYPE_DIRECTORY => write_directory(
-                &header,
-                preserve_permissions,
-                log_level,
-                &mut extractor.mtimes,
-            )?,
-            FILETYPE_REGULAR_FILE => write_file(
-                archive,
-                &header,
-                preserve_permissions,
-                &mut extractor.seen_files,
-                log_level,
-            )?,
-            FILETYPE_SYMLINK => {
-                write_symbolic_link(archive, &header, preserve_permissions, log_level)?
-            }
-            FILETYPE_FIFO | FILETYPE_BLOCK_DEVICE | FILETYPE_SOCKET => {
-                unimplemented!(
-                    "Mode {:o} (file {}) not implemented. Please open a bug report requesting support for this type.",
-                    header.mode, header.filename
-                )
-            }
-            _ => {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    format!(
-                        "Invalid/unknown filetype {:o}: {}",
+            match header.mode & MODE_FILETYPE_MASK {
+                FILETYPE_DIRECTORY | FILETYPE_SYMLINK => {
+                    header.skip_file_content(archive)?;
+                }
+                FILETYPE_REGULAR_FILE => write_file_content(archive, out, &header)?,
+                FILETYPE_CHARACTER_DEVICE
+                | FILETYPE_FIFO
+                | FILETYPE_BLOCK_DEVICE
+                | FILETYPE_SOCKET => {
+                    unimplemented!(
+                        "Mode {:o} (file {}) not implemented. Please open a bug report requesting support for this type.",
                         header.mode, header.filename
-                    ),
-                ))
+                    )
+                }
+                _ => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        format!(
+                            "Invalid/unknown filetype {:o}: {}",
+                            header.mode, header.filename
+                        ),
+                    ))
+                }
+            }
+        } else {
+            match header.mode & MODE_FILETYPE_MASK {
+                FILETYPE_CHARACTER_DEVICE => {
+                    write_character_device(&header, preserve_permissions, log_level)?
+                }
+                FILETYPE_DIRECTORY => write_directory(
+                    &header,
+                    preserve_permissions,
+                    log_level,
+                    &mut extractor.mtimes,
+                )?,
+                FILETYPE_REGULAR_FILE => write_file(
+                    archive,
+                    &header,
+                    preserve_permissions,
+                    &mut extractor.seen_files,
+                    log_level,
+                )?,
+                FILETYPE_SYMLINK => {
+                    write_symbolic_link(archive, &header, preserve_permissions, log_level)?
+                }
+                FILETYPE_FIFO | FILETYPE_BLOCK_DEVICE | FILETYPE_SOCKET => {
+                    unimplemented!(
+                        "Mode {:o} (file {}) not implemented. Please open a bug report requesting support for this type.",
+                        header.mode, header.filename
+                    )
+                }
+                _ => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        format!(
+                            "Invalid/unknown filetype {:o}: {}",
+                            header.mode, header.filename
+                        ),
+                    ))
+                }
             }
         };
     }
@@ -733,11 +764,12 @@ pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<
     Ok(())
 }
 
-pub fn extract_cpio_archive(
+pub fn extract_cpio_archive<W: Write>(
     mut archive: File,
     patterns: Vec<Pattern>,
     preserve_permissions: bool,
     subdir: Option<String>,
+    mut out: Option<&mut W>,
     log_level: u32,
 ) -> Result<()> {
     let mut count = 1;
@@ -759,6 +791,7 @@ pub fn extract_cpio_archive(
                 &dir,
                 &patterns,
                 preserve_permissions,
+                &mut out,
                 log_level,
             )?;
         } else {
@@ -768,6 +801,7 @@ pub fn extract_cpio_archive(
                 &dir,
                 &patterns,
                 preserve_permissions,
+                &mut out,
                 log_level,
             )?;
             break;
@@ -831,6 +865,7 @@ pub fn list_cpio_content<W: Write>(
 #[cfg(test)]
 mod tests {
     use std::env::{self, current_dir, set_current_dir};
+    use std::io::Stdout;
     use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 
     use super::*;
@@ -915,6 +950,7 @@ mod tests {
             &tempdir.path,
             &Vec::new(),
             false,
+            &mut None::<Stdout>,
             LOG_LEVEL_WARNING,
         )
         .unwrap_err();
@@ -923,6 +959,24 @@ mod tests {
             "The parent directory of \"tmp/trav.txt\" (resolved to \"/tmp\") is not within the directory {:#?}.",
             &tempdir.path
         ));
+    }
+
+    #[test]
+    fn test_read_cpio_and_extract_path_traversal_to_stdout() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let mut archive = File::open("tests/path-traversal.cpio").unwrap();
+        let base_dir = std::env::current_dir().unwrap();
+        let mut output = Vec::new();
+        read_cpio_and_extract(
+            &mut archive,
+            &base_dir,
+            &Vec::new(),
+            false,
+            &mut Some(&mut output),
+            LOG_LEVEL_WARNING,
+        )
+        .unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), "TEST Traversal\n");
     }
 
     #[test]
@@ -961,11 +1015,32 @@ mod tests {
             Vec::new(),
             false,
             Some("cpio".into()),
+            None::<&mut Stdout>,
             LOG_LEVEL_WARNING,
         )
         .unwrap();
         let path = tempdir.path.join("cpio1/path/file");
         assert!(path.exists());
+    }
+
+    #[test]
+    fn test_extract_cpio_archive_copressed_to_stdout() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let archive = File::open("tests/bzip2.cpio").unwrap();
+        let mut output = Vec::new();
+        extract_cpio_archive(
+            archive,
+            Vec::new(),
+            false,
+            None,
+            Some(&mut output),
+            LOG_LEVEL_WARNING,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "content\nThis is a fake busybox binary to simulate a POSIX shell\n"
+        );
     }
 
     #[test]
@@ -975,9 +1050,38 @@ mod tests {
         let tempdir = TempDir::new().unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
         set_current_dir(&tempdir.path).unwrap();
-        extract_cpio_archive(archive, patterns, false, None, LOG_LEVEL_WARNING).unwrap();
+        extract_cpio_archive(
+            archive,
+            patterns,
+            false,
+            None,
+            None::<&mut Stdout>,
+            LOG_LEVEL_WARNING,
+        )
+        .unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
+    }
+
+    #[test]
+    fn test_extract_cpio_archive_copressed_with_pattern_to_stdout() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let archive = File::open("tests/gzip.cpio").unwrap();
+        let patterns: Vec<Pattern> = vec![Pattern::new("*/b?n/sh").unwrap()];
+        let mut output = Vec::new();
+        extract_cpio_archive(
+            archive,
+            patterns,
+            false,
+            None,
+            Some(&mut output),
+            LOG_LEVEL_WARNING,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "This is a fake busybox binary to simulate a POSIX shell\n"
+        );
     }
 
     #[test]
@@ -987,7 +1091,15 @@ mod tests {
         let tempdir = TempDir::new().unwrap();
         let patterns = vec![Pattern::new("path").unwrap()];
         set_current_dir(&tempdir.path).unwrap();
-        extract_cpio_archive(archive, patterns, false, None, LOG_LEVEL_WARNING).unwrap();
+        extract_cpio_archive(
+            archive,
+            patterns,
+            false,
+            None,
+            None::<&mut Stdout>,
+            LOG_LEVEL_WARNING,
+        )
+        .unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
     }

@@ -189,6 +189,21 @@ fn test_examine_single_cpio() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_extract_to_stdout() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("-x")
+        .arg("--to-stdout")
+        .arg("tests/gzip.cpio")
+        .arg("path/f?le");
+
+    cmd.output()?
+        .assert_stderr("")
+        .assert_success()
+        .assert_stdout("content\n");
+    Ok(())
+}
+
+#[test]
 fn test_help() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--help");
