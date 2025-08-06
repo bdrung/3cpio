@@ -95,16 +95,12 @@ impl OutputContainsAssertion for Output {
 fn test_create_cpio_on_stdout() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--create");
-    let mut process = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+    let process = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
     let mut stdin = process.stdin.as_ref().unwrap();
     stdin.write_all(b"/usr\t\t\t\t\t\t1681992796\n")?;
-    let _status = process.wait()?;
-    //let mut stdout = process.stdout.unwrap().take(1000);
-    let mut stdout = process.stdout.unwrap();
-    let mut cpio = Vec::new();
-    stdout.read_to_end(&mut cpio)?;
+    let output = process.wait_with_output()?;
     assert_eq!(
-        std::str::from_utf8(&cpio).unwrap(),
+        std::str::from_utf8(&output.stdout).unwrap(),
         "07070100000000000041ED00000000000000000000000264412C5C\
         00000000000000000000000000000000000000000000000400000000\
         usr\0\0\0\
@@ -127,10 +123,10 @@ fn test_create_cpio_file() -> Result<(), Box<dyn Error>> {
 
     let mut cmd = get_command();
     cmd.args(["--create", &path]);
-    let mut process = cmd.stdin(Stdio::piped()).spawn()?;
+    let process = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
     let mut stdin = process.stdin.as_ref().unwrap();
     stdin.write_all(b"/usr\t\t\t\t\t\t1681992796\n")?;
-    let _status = process.wait()?;
+    process.wait_with_output()?.assert_stdout("");
 
     let mut cpio = Vec::new();
     let mut cpio_file = File::open(&path)?;
