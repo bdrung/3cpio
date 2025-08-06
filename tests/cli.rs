@@ -1,7 +1,7 @@
 // Copyright (C) 2024, Benjamin Drung <bdrung@posteo.de>
 // SPDX-License-Identifier: ISC
 
-use std::env::{self, temp_dir};
+use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -117,7 +117,8 @@ fn test_create_cpio_on_stdout() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_create_cpio_file() -> Result<(), Box<dyn Error>> {
-    let mut path = temp_dir();
+    let temp_dir = TempDir::new()?;
+    let mut path = temp_dir.path.clone();
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();

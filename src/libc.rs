@@ -125,20 +125,8 @@ pub fn strftime_local(format: &[u8], timestamp: u32) -> Result<String> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use std::env::temp_dir;
-    use std::fs::{self, create_dir};
-    use std::path::PathBuf;
+    use crate::temp_dir::TempDir;
     use std::time::{Duration, SystemTime};
-
-    pub fn make_temp_dir() -> Result<PathBuf> {
-        let mut dir = temp_dir();
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap();
-        dir.push(format!("3cpio-{now:?}"));
-        create_dir(&dir)?;
-        Ok(dir)
-    }
 
     extern "C" {
         fn tzset();
@@ -174,19 +162,21 @@ pub mod tests {
     // Create a temporary directory and set the mtime 10 seconds earlier
     // than the current mtime of the directory.
     fn test_set_modified() {
-        let dir: PathBuf = make_temp_dir().unwrap();
-        let modified = dir.metadata().unwrap().modified().unwrap();
+        let dir = TempDir::new().unwrap();
+        let modified = dir.path.metadata().unwrap().modified().unwrap();
         let duration = modified.duration_since(SystemTime::UNIX_EPOCH).unwrap();
         let new_modified = SystemTime::UNIX_EPOCH
             .checked_add(Duration::new(duration.as_secs() - 10, 0))
             .unwrap();
 
         let mtime = new_modified.duration_since(SystemTime::UNIX_EPOCH).unwrap();
-        let p = dir.clone().into_os_string().into_string().unwrap();
+        let p = dir.path.clone().into_os_string().into_string().unwrap();
         set_modified(&p, mtime.as_secs().try_into().unwrap()).unwrap();
 
-        assert_eq!(dir.metadata().unwrap().modified().unwrap(), new_modified);
-        fs::remove_dir(dir).unwrap();
+        assert_eq!(
+            dir.path.metadata().unwrap().modified().unwrap(),
+            new_modified
+        );
     }
 
     #[test]

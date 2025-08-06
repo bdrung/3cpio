@@ -728,20 +728,19 @@ pub fn write_padding<W: Write>(file: &mut W, written_bytes: u32) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use std::fs::{canonicalize, hard_link};
-    use std::path::PathBuf;
 
     use super::*;
-    use crate::libc::tests::make_temp_dir;
+    use crate::temp_dir::TempDir;
     use crate::LOG_LEVEL_WARNING;
 
-    pub fn make_temp_dir_with_hardlinks() -> Result<PathBuf> {
-        let temp_dir = make_temp_dir()?;
-        let path = temp_dir.join("a");
+    pub fn make_temp_dir_with_hardlinks() -> Result<TempDir> {
+        let temp_dir = TempDir::new()?;
+        let path = temp_dir.path.join("a");
         let mut file = std::fs::File::create(&path)?;
         file.set_permissions(PermissionsExt::from_mode(0o755))?;
         file.write_all(b"content")?;
-        hard_link(&path, temp_dir.join("b"))?;
-        hard_link(&path, temp_dir.join("c"))?;
+        hard_link(&path, temp_dir.path.join("b"))?;
+        hard_link(&path, temp_dir.path.join("c"))?;
         Ok(temp_dir)
     }
 
@@ -1015,7 +1014,7 @@ mod tests {
     #[test]
     fn test_file_from_line_location_hardlink() {
         let temp_dir = make_temp_dir_with_hardlinks().unwrap();
-        let path = temp_dir.join("a").to_str().unwrap().to_owned();
+        let path = temp_dir.path.join("a").to_str().unwrap().to_owned();
         let line = format!("{path}\ta\t\t644\t1\t2");
         let stat = symlink_metadata(&path).unwrap();
         let mtime = stat.mtime().try_into().unwrap();
@@ -1038,7 +1037,7 @@ mod tests {
 
         let line = format!(
             "{}/b\tb\t\t640\t3\t4\t1751413453",
-            temp_dir.to_str().unwrap()
+            temp_dir.path.to_str().unwrap()
         );
         let (file, umask) = File::from_line(line, &mut hardlinks).unwrap();
         assert_eq!(
@@ -1352,11 +1351,11 @@ mod tests {
 
     #[test]
     fn test_manifest_write_fail_compression() {
-        let temp_dir = make_temp_dir().unwrap();
+        let temp_dir = TempDir::new().unwrap();
         let root_dir = File::new(Filetype::Directory, ".", 0o755, 0x333, 0x42, 0x6841897B);
         let archive = Archive::with_files_compressed(vec![root_dir], Compression::Failing);
         let manifest = Manifest::new(vec![archive], 0o022);
-        let file = std::fs::File::create(temp_dir.join("initrd.img")).unwrap();
+        let file = std::fs::File::create(temp_dir.path.join("initrd.img")).unwrap();
         let got = manifest
             .write_archive(Some(file), None, LOG_LEVEL_WARNING)
             .unwrap_err();
@@ -1442,7 +1441,7 @@ mod tests {
     #[test]
     fn test_archive_write_hardlinks() {
         let temp_dir = make_temp_dir_with_hardlinks().unwrap();
-        let path = temp_dir.join("a").to_str().unwrap().to_owned();
+        let path = temp_dir.path.join("a").to_str().unwrap().to_owned();
         // This archive data is the output of test_file_from_line_location_hardlink.
         let archive = Archive::with_files_and_hardlinks(
             vec![
