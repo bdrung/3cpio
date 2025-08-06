@@ -92,6 +92,63 @@ impl OutputContainsAssertion for Output {
 }
 
 #[test]
+fn test_create_compressed_cpio_file() -> Result<(), Box<dyn Error>> {
+    let temp_dir = TempDir::new()?;
+    let path = temp_dir.path.join("empty.cpio");
+    let path = path.into_os_string().into_string().unwrap();
+
+    let mut cmd = get_command();
+    cmd.args(["--create", &path])
+        .env("SOURCE_DATE_EPOCH", "1754509394")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let process = cmd.spawn()?;
+    let mut stdin = process.stdin.as_ref().unwrap();
+    stdin.write_all(b"#cpio: lz4 -0\n")?;
+    process
+        .wait_with_output()?
+        .assert_stdout("")
+        .assert_stderr("Compression level 0 lower than minimum, raising to 1.\n");
+
+    let mut cpio = Vec::new();
+    let mut cpio_file = File::open(&path)?;
+    cpio_file.read_to_end(&mut cpio)?;
+    assert_eq!(
+        cpio,
+        b"\x02!L\x18%\0\0\0\x7f0707010\
+        \x01\0\x13\x0f(\0\x15\x0c\x02\0\x14B\x11\0\xe0T\
+        RAILER!!!\0\0\0\0",
+    );
+    Ok(())
+}
+
+#[test]
+fn test_create_compressed_cpio_on_stdout() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("--create")
+        .env("SOURCE_DATE_EPOCH", "1754504178")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let process = cmd.spawn()?;
+    let mut stdin = process.stdin.as_ref().unwrap();
+    stdin.write_all(b"#cpio: zstd -42\n/usr\t\t\t\t\t\t1681992796\n")?;
+    let output = process
+        .wait_with_output()?
+        .assert_stderr("Compression level 42 higher than maximum, reducing to 19.\n");
+    assert_eq!(
+        output.stdout,
+        b"(\xb5/\xfd\x04h\x0d\x02\0\x02\xc3\x0a\x11\x90M\x07\
+        \xa0\xff\x18S\x04G\xf3[\xc9\xb1\xef\x8eT\x06m\x0b\
+        \0h\x8a-\xd3\xdc\xe7l\xfb`\\\x8c\x06\x0a)\x04\
+        \x09'\x95\xe2\xbc\\\x0e\x08 \xc0s\x07\x19\xde\x89v\
+        \xe16%\xc3\x9b\x88\xd2F1\x02\xd2\\\x1b:"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_create_cpio_on_stdout() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--create");

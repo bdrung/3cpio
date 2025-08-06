@@ -114,7 +114,7 @@ impl Compression {
         for parameter in iter {
             match parameter.strip_prefix("-") {
                 Some(value) => {
-                    if let Ok(level) = value.parse::<i64>() {
+                    if let Ok(mut level) = value.parse::<i64>() {
                         let (min, max) = match compression {
                             Self::Uncompressed => (0, 0),
                             Self::Bzip2 { level: _ } => (1, 9),
@@ -127,11 +127,18 @@ impl Compression {
                             #[cfg(test)]
                             Self::NonExistent | Self::Failing => (0, 0),
                         };
-                        if level >= min || level <= max {
-                            compression.set_level(level.try_into().unwrap());
-                        } else {
-                            eprintln!("Compression level '{level}' outside of range from {min} to {max}. Ignoring it.")
+                        if level < min {
+                            eprintln!(
+                                "Compression level {level} lower than minimum, raising to {min}."
+                            );
+                            level = min;
+                        } else if level > max {
+                            eprintln!(
+                                "Compression level {level} higher than maximum, reducing to {max}."
+                            );
+                            level = max;
                         }
+                        compression.set_level(level.try_into().unwrap());
                     } else {
                         eprintln!(
                             "Unknown/unsupported compression parameter '{parameter}'. Ignoring it.",
