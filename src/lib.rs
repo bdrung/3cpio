@@ -995,7 +995,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_cpio_archive_copressed_to_stdout() {
+    fn test_extract_cpio_archive_compressed_to_stdout() {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open("tests/bzip2.cpio").unwrap();
         let mut output = Vec::new();
@@ -1015,7 +1015,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_cpio_archive_copressed_with_pattern() {
+    fn test_extract_cpio_archive_compressed_with_pattern() {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open("tests/zstd.cpio").unwrap();
         let tempdir = TempDir::new().unwrap();
@@ -1035,7 +1035,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_cpio_archive_copressed_with_pattern_to_stdout() {
+    fn test_extract_cpio_archive_compressed_with_pattern_to_stdout() {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open("tests/gzip.cpio").unwrap();
         let patterns: Vec<Pattern> = vec![Pattern::new("*/b?n/sh").unwrap()];
@@ -1056,7 +1056,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_cpio_archive_uncopressed_with_pattern() {
+    fn test_extract_cpio_archive_uncompressed_with_pattern() {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open("tests/single.cpio").unwrap();
         let tempdir = TempDir::new().unwrap();
