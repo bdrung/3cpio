@@ -772,16 +772,16 @@ pub fn extract_cpio_archive<W: Write>(
     let mut count = 1;
     let base_dir = std::env::current_dir()?;
     loop {
+        let compression = match read_magic_header(&mut archive) {
+            None => return Ok(()),
+            Some(x) => x?,
+        };
         let mut dir = base_dir.clone();
         if let Some(ref s) = subdir {
             dir.push(format!("{s}{count}"));
             create_dir_ignore_existing(&dir)?;
             std::env::set_current_dir(&dir)?;
         }
-        let compression = match read_magic_header(&mut archive) {
-            None => return Ok(()),
-            Some(x) => x?,
-        };
         if compression.is_uncompressed() {
             read_cpio_and_extract(
                 &mut archive,
