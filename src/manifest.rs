@@ -728,6 +728,7 @@ pub fn write_padding<W: Write>(file: &mut W, written_bytes: u32) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use std::fs::{canonicalize, hard_link};
+    use std::io::Read;
 
     use super::*;
     use crate::temp_dir::TempDir;
@@ -1347,6 +1348,172 @@ mod tests {
             got.to_string(),
             "line 1: Unknown compression format: brotli"
         );
+    }
+
+    #[test]
+    fn test_manifest_write_archive_empty_bzip2() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path.join("initrd.img");
+        let input = b"#cpio: bzip2 -3\n";
+        let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
+        let file = std::fs::File::create(&path).unwrap();
+        manifest
+            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .unwrap();
+        let mut written_file = std::fs::File::open(&path).unwrap();
+        let mut output = Vec::new();
+        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        assert_eq!(
+            output,
+            b"BZh31AY&SY\x12<\x9e\xb3\0\0\
+            \x0c^\0D\0(\0h\x802$\x14\0 \x001\
+            L\0\0\xd3(\x0d\x0fH\x88\x17A\xa8\x8eh!$\
+            \xe5l\xc6e\xf5\xba\xaf\x8b\xb9\"\x9c(H\x09\x1eOY\x80"
+        );
+        assert_eq!(read, 66);
+    }
+
+    #[test]
+    fn test_manifest_write_archive_empty_gzip() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path.join("initrd.img");
+        let input = b"#cpio: gzip -7\n";
+        let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
+        let file = std::fs::File::create(&path).unwrap();
+        manifest
+            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .unwrap();
+        let mut written_file = std::fs::File::open(&path).unwrap();
+        let mut output = Vec::new();
+        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        assert_eq!(
+            output,
+            b"\x1f\x8b\x08\0\0\0\0\0\0\x03307070\
+            4 \x0e\x10\xab\x0e\x1d8\xc1\x18!A\x8e\x9e>\xae\
+            A\x8a\x8a\x8a\x0c@\0\0N\xe5\x097|\0\0\0"
+        );
+        assert_eq!(read, 48);
+    }
+
+    #[test]
+    fn test_manifest_write_archive_empty_lz4() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path.join("initrd.img");
+        let input = b"#cpio: lz4 -4\n";
+        let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
+        let file = std::fs::File::create(&path).unwrap();
+        manifest
+            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .unwrap();
+        let mut written_file = std::fs::File::open(&path).unwrap();
+        let mut output = Vec::new();
+        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        assert_eq!(
+            output,
+            b"\x02!L\x18$\0\0\0\x7f0707010\
+            \x01\0\x13/10\x01\0#\x14B\x09\0\xe0TR\
+            AILER!!!\0\0\0\0"
+        );
+        assert_eq!(read, 44);
+    }
+
+    #[test]
+    fn test_manifest_write_archive_empty_lzma() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path.join("initrd.img");
+        let input = b"#cpio: lzma -1\n";
+        let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
+        let file = std::fs::File::create(&path).unwrap();
+        manifest
+            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .unwrap();
+        let mut written_file = std::fs::File::open(&path).unwrap();
+        let mut output = Vec::new();
+        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        assert_eq!(
+            output,
+            b"]\0\0\x10\0\xff\xff\xff\xff\xff\xff\xff\xff\0\x18\x0d\
+            \xdd\x04b3\x02;A\xe5P\x06\xe8\xc4\xa0\xd8\x89Z\
+            pL\xa1]\xb0mv\xe7&\xc4o\xff\xfe$\x90\0"
+        );
+        assert_eq!(read, 48);
+    }
+
+    #[test]
+    fn test_manifest_write_archive_empty_lzop() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path.join("initrd.img");
+        let input = b"#cpio: lzop -9\n";
+        let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
+        let file = std::fs::File::create(&path).unwrap();
+        manifest
+            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .unwrap();
+        let mut written_file = std::fs::File::open(&path).unwrap();
+        let mut output = Vec::new();
+        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        // The lzop magic is 9 bytes long. Then follows: 3x 16-bit version fields,
+        // 2x 8-bit method and level, 2x 32-bit flags and mode, and 64-bit mtime.
+        // Then follows the filename (8-bit size) and then the 32-bit CRC32 checksum.
+        output.splice(9..15, b"versio".to_owned());
+        output.splice(25..33, b"mtime-42".to_owned());
+        output.splice(34..38, b"CRCS".to_owned());
+        assert_eq!(
+            output,
+            b"\x89LZO\0\x0d\x0a\x1a\x0aversio\x03\
+            \x09\x03\0\0\x0d\0\0\0\0mtime-4\
+            2\0CRCS\0\0\0|\0\0\0%\xbc\x7f\
+            \x179\x1307F\x0010 \x05\x02\x0010 \
+            \x15\x01\0B\xe0\x01\x08TRAILER!!\
+            !\0@\0\x11\0\0\0\0\0\0"
+        );
+        assert_eq!(read, 91);
+    }
+
+    #[test]
+    fn test_manifest_write_archive_empty_xz() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path.join("initrd.img");
+        let input = b"#cpio: xz -6\n";
+        let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
+        let file = std::fs::File::create(&path).unwrap();
+        manifest
+            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .unwrap();
+        let mut written_file = std::fs::File::open(&path).unwrap();
+        let mut output = Vec::new();
+        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        assert_eq!(
+            output,
+            b"\xfd7zXZ\0\0\x01i\"\xde6\x02\0!\x01\
+            \x16\0\0\0t/\xe5\xa3\xe0\0{\0\x1c]\0\x18\
+            \x0d\xdd\x04c\x9d\x8a@Z1\xe4\xcb{\x1c\xc7\xc9\xc0\
+            \xef\x917N\x01]\xbd\xd5q\xc8\0\0N\xe5\x097\
+            \0\x014|\xcb{\x1f\xc2\x90B\x99\x0d\x01\0\0\0\0\x01YZ"
+        );
+        assert_eq!(read, 84);
+    }
+
+    #[test]
+    fn test_manifest_write_archive_empty_zstd() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path.join("initrd.img");
+        let input = b"#cpio: zstd -2\n";
+        let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
+        let file = std::fs::File::create(&path).unwrap();
+        manifest
+            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .unwrap();
+        let mut written_file = std::fs::File::open(&path).unwrap();
+        let mut output = Vec::new();
+        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        assert_eq!(
+            output,
+            b"(\xb5/\xfd\x04P\x15\x01\0\xc8070701\
+            010B0TRAILER!!!\0\
+            \0\0\0\x03\x10\0\x19\xde\x89?F\x95\xfb\x16m"
+        );
+        assert_eq!(read, 47);
     }
 
     #[test]
