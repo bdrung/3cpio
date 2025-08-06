@@ -769,9 +769,10 @@ pub fn extract_cpio_archive<W: Write>(
     mut out: Option<&mut W>,
     log_level: u32,
 ) -> Result<()> {
-    let mut count = 1;
+    let mut count = 0;
     let base_dir = std::env::current_dir()?;
     loop {
+        count += 1;
         let compression = match read_magic_header(&mut archive) {
             None => return Ok(()),
             Some(x) => x?,
@@ -803,7 +804,6 @@ pub fn extract_cpio_archive<W: Write>(
             )?;
             break;
         }
-        count += 1;
     }
     Ok(())
 }
