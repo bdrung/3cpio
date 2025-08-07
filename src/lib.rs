@@ -891,7 +891,7 @@ mod tests {
     use crate::temp_dir::TempDir;
 
     // Lock for tests that rely on / change the current directory
-    pub static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
+    static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
 
     fn getgid() -> u32 {
         unsafe { ::libc::getgid() }
@@ -899,6 +899,12 @@ mod tests {
 
     fn getuid() -> u32 {
         unsafe { ::libc::getuid() }
+    }
+
+    pub fn tests_path<P: AsRef<Path>>(path: P) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join(path)
     }
 
     extern "C" {
@@ -934,7 +940,7 @@ mod tests {
     #[test]
     fn test_read_cpio_and_extract_path_traversal() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let mut archive = File::open("tests/path-traversal.cpio").unwrap();
+        let mut archive = File::open(tests_path("path-traversal.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let got = read_cpio_and_extract(
             &mut archive,
@@ -954,8 +960,7 @@ mod tests {
 
     #[test]
     fn test_read_cpio_and_extract_path_traversal_to_stdout() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let mut archive = File::open("tests/path-traversal.cpio").unwrap();
+        let mut archive = File::open(tests_path("path-traversal.cpio")).unwrap();
         let base_dir = std::env::current_dir().unwrap();
         let mut output = Vec::new();
         read_cpio_and_extract(
@@ -989,16 +994,15 @@ mod tests {
 
     #[test]
     fn test_get_cpio_archive_count_single() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let mut archive = File::open("tests/single.cpio").expect("test cpio should be present");
+        let mut archive =
+            File::open(tests_path("single.cpio")).expect("test cpio should be present");
         let count = get_cpio_archive_count(&mut archive).unwrap();
         assert_eq!(count, 1);
     }
 
     #[test]
     fn test_extract_cpio_archive_compressed_parts_to_stdout() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let archive = File::open("tests/lzma.cpio").unwrap();
+        let archive = File::open(tests_path("lzma.cpio")).unwrap();
         let mut output = Vec::new();
         extract_cpio_archive(
             archive,
@@ -1016,7 +1020,7 @@ mod tests {
     #[test]
     fn test_extract_cpio_archive_with_subdir() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let archive = File::open("tests/single.cpio").unwrap();
+        let archive = File::open(tests_path("single.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         extract_cpio_archive(
             archive,
@@ -1034,8 +1038,7 @@ mod tests {
 
     #[test]
     fn test_extract_cpio_archive_compressed_to_stdout() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let archive = File::open("tests/bzip2.cpio").unwrap();
+        let archive = File::open(tests_path("bzip2.cpio")).unwrap();
         let mut output = Vec::new();
         extract_cpio_archive(
             archive,
@@ -1056,7 +1059,7 @@ mod tests {
     #[test]
     fn test_extract_cpio_archive_compressed_with_pattern() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let archive = File::open("tests/zstd.cpio").unwrap();
+        let archive = File::open(tests_path("zstd.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
         extract_cpio_archive(
@@ -1075,8 +1078,7 @@ mod tests {
 
     #[test]
     fn test_extract_cpio_archive_compressed_with_pattern_to_stdout() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let archive = File::open("tests/gzip.cpio").unwrap();
+        let archive = File::open(tests_path("gzip.cpio")).unwrap();
         let patterns: Vec<Pattern> = vec![Pattern::new("*/b?n/sh").unwrap()];
         let mut output = Vec::new();
         extract_cpio_archive(
@@ -1098,7 +1100,7 @@ mod tests {
     #[test]
     fn test_extract_cpio_archive_uncompressed_with_pattern() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let archive = File::open("tests/single.cpio").unwrap();
+        let archive = File::open(tests_path("single.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("path").unwrap()];
         extract_cpio_archive(
@@ -1117,8 +1119,7 @@ mod tests {
 
     #[test]
     fn test_list_cpio_content_compressed_parts() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let archive = File::open("tests/lzop.cpio").unwrap();
+        let archive = File::open(tests_path("lzop.cpio")).unwrap();
         let mut output = Vec::new();
         list_cpio_content(
             archive,
@@ -1136,8 +1137,7 @@ mod tests {
 
     #[test]
     fn test_list_cpio_content_compressed_with_pattern() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let archive = File::open("tests/xz.cpio").unwrap();
+        let archive = File::open(tests_path("xz.cpio")).unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
         let mut output = Vec::new();
         list_cpio_content(archive, &mut output, None, &patterns, LOG_LEVEL_WARNING).unwrap();
@@ -1146,8 +1146,7 @@ mod tests {
 
     #[test]
     fn test_list_cpio_content_uncompressed_with_pattern() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let archive = File::open("tests/single.cpio").unwrap();
+        let archive = File::open(tests_path("single.cpio")).unwrap();
         let patterns = vec![Pattern::new("*/file").unwrap()];
         let mut output = Vec::new();
         list_cpio_content(archive, &mut output, None, &patterns, LOG_LEVEL_WARNING).unwrap();
@@ -1156,8 +1155,7 @@ mod tests {
 
     #[test]
     fn test_print_cpio_archive_count() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let mut archive = File::open("tests/zstd.cpio").expect("test cpio should be present");
+        let mut archive = File::open(tests_path("zstd.cpio")).expect("test cpio should be present");
         let mut output = Vec::new();
 
         let count = get_cpio_archive_count(&mut archive).unwrap();

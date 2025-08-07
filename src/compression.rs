@@ -296,12 +296,11 @@ impl Compression {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::TEST_LOCK;
+    use crate::tests::tests_path;
 
     #[test]
     fn test_compression_decompress_program_not_found() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let archive = File::open("tests/single.cpio").expect("test cpio should be present");
+        let archive = File::open(tests_path("single.cpio")).expect("test cpio should be present");
         let compression = Compression::NonExistent;
         let got = compression.decompress(archive).unwrap_err();
         assert_eq!(got.kind(), ErrorKind::Other);
