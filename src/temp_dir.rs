@@ -8,21 +8,31 @@ use std::time::SystemTime;
 
 pub struct TempDir {
     pub path: PathBuf,
-    cwd: PathBuf,
+    cwd: Option<PathBuf>,
 }
 
 impl TempDir {
     pub fn new() -> Result<Self> {
-        // Use some very pseudo-random number
-        let cwd = current_dir()?;
         let path = create_tempdir()?;
-        Ok(Self { path, cwd })
+        Ok(Self { path, cwd: None })
+    }
+
+    pub fn new_and_set_current_dir() -> Result<Self> {
+        let path = create_tempdir()?;
+        let cwd = current_dir()?;
+        set_current_dir(&path)?;
+        Ok(Self {
+            path,
+            cwd: Some(cwd),
+        })
     }
 }
 
 impl Drop for TempDir {
     fn drop(&mut self) {
-        let _ = set_current_dir(&self.cwd);
+        if let Some(cwd) = self.cwd.as_ref() {
+            let _ = set_current_dir(cwd);
+        }
         let _ = std::fs::remove_dir_all(&self.path);
     }
 }

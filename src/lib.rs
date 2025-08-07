@@ -882,7 +882,7 @@ pub fn list_cpio_content<W: Write>(
 
 #[cfg(test)]
 mod tests {
-    use std::env::{self, set_current_dir};
+    use std::env;
     use std::io::Stdout;
     use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 
@@ -935,8 +935,7 @@ mod tests {
     fn test_read_cpio_and_extract_path_traversal() {
         let _lock = TEST_LOCK.lock().unwrap();
         let mut archive = File::open("tests/path-traversal.cpio").unwrap();
-        let tempdir = TempDir::new().unwrap();
-        set_current_dir(&tempdir.path).unwrap();
+        let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let got = read_cpio_and_extract(
             &mut archive,
             &tempdir.path,
@@ -1018,8 +1017,7 @@ mod tests {
     fn test_extract_cpio_archive_with_subdir() {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open("tests/single.cpio").unwrap();
-        let tempdir = TempDir::new().unwrap();
-        set_current_dir(&tempdir.path).unwrap();
+        let tempdir = TempDir::new_and_set_current_dir().unwrap();
         extract_cpio_archive(
             archive,
             None,
@@ -1059,9 +1057,8 @@ mod tests {
     fn test_extract_cpio_archive_compressed_with_pattern() {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open("tests/zstd.cpio").unwrap();
-        let tempdir = TempDir::new().unwrap();
+        let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
-        set_current_dir(&tempdir.path).unwrap();
         extract_cpio_archive(
             archive,
             None,
@@ -1102,9 +1099,8 @@ mod tests {
     fn test_extract_cpio_archive_uncompressed_with_pattern() {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open("tests/single.cpio").unwrap();
-        let tempdir = TempDir::new().unwrap();
+        let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("path").unwrap()];
-        set_current_dir(&tempdir.path).unwrap();
         extract_cpio_archive(
             archive,
             None,
@@ -1358,8 +1354,7 @@ mod tests {
             // This test needs to run as root.
             return;
         }
-        let tempdir = TempDir::new().unwrap();
-        set_current_dir(&tempdir.path).unwrap();
+        let _tempdir = TempDir::new_and_set_current_dir().unwrap();
         let mut header = Header::new(1, 0o20_644, 0, 0, 0, 1740402179, 0, 0, 0, "./null");
         header.rmajor = 1;
         header.rminor = 3;
@@ -1380,8 +1375,7 @@ mod tests {
     #[test]
     fn test_write_directory_with_setuid() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let tempdir = TempDir::new().unwrap();
-        set_current_dir(&tempdir.path).unwrap();
+        let _tempdir = TempDir::new_and_set_current_dir().unwrap();
         let mut mtimes = BTreeMap::new();
         let header = Header::new(
             1,
@@ -1412,8 +1406,7 @@ mod tests {
     #[test]
     fn test_write_file_with_setuid() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let tempdir = TempDir::new().unwrap();
-        set_current_dir(&tempdir.path).unwrap();
+        let _tempdir = TempDir::new_and_set_current_dir().unwrap();
         let mut seen_files = SeenFiles::new();
         let header = Header::new(
             1,
@@ -1450,8 +1443,7 @@ mod tests {
     #[test]
     fn test_write_symbolic_link() {
         let _lock = TEST_LOCK.lock().unwrap();
-        let tempdir = TempDir::new().unwrap();
-        set_current_dir(&tempdir.path).unwrap();
+        let _tempdir = TempDir::new_and_set_current_dir().unwrap();
         let header = Header::new(
             1,
             0o120_777,
