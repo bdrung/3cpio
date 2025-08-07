@@ -596,6 +596,7 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
         }
 
         if out.is_none() && !header.is_root_directory() {
+            // TODO: use dirfd once stable: https://github.com/rust-lang/rust/issues/120426
             let absdir = absolute_parent_directory(&header.filename, base_dir)?;
             // canonicalize() is an expensive call. So cache the previously resolved
             // parent directory. Skip the path traversal check in case the absolute
