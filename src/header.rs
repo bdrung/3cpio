@@ -201,9 +201,31 @@ impl Header {
         seen_files.get(&self.ino_and_dev())
     }
 
-    pub fn write<W: Write>(&self, file: &mut W) -> Result<u64> {
+    pub fn write_with_alignment<W: Write>(
+        &self,
+        file: &mut W,
+        alignment: Option<u32>,
+        written: u64,
+    ) -> Result<u64> {
         // The filename needs to be terminated with \0.
-        let filename_len: u32 = match (self.filename.len() + 1).try_into() {
+        let mut filename_len = self.filename.len().checked_add(1).unwrap();
+        let padding_len;
+        let padding;
+        if alignment.is_none() || self.filesize == 0 {
+            padding_len = align_to_4_bytes(CPIO_HEADER_LENGTH + filename_len as u32);
+            padding = vec![0u8; (padding_len as usize) + 1];
+        } else {
+            let pad_filename = alignment.unwrap();
+            // TODO: check size
+            let pad_len = align_padlen(
+                written + u64::from(CPIO_HEADER_LENGTH) + filename_len as u64,
+                pad_filename,
+            );
+            filename_len += pad_len as usize;
+            padding = vec![0u8; (pad_len + 1).try_into().unwrap()];
+            padding_len = 0;
+        }
+        let filename_len: u32 = match filename_len.try_into() {
             Ok(l) => l,
             Err(_) => {
                 return Err(Error::new(
@@ -212,8 +234,6 @@ impl Header {
                 ))
             }
         };
-        let padding_len = align_to_4_bytes(CPIO_HEADER_LENGTH + filename_len);
-        let padding = [0u8; 5];
         write!(
             file,
             "{}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}00000000{}{}",
@@ -221,9 +241,13 @@ impl Header {
             self.mode, self.uid, self.gid, self.nlink, self.mtime, self.filesize,
             self.major, self.minor, self.rmajor, self.rminor,
             filename_len, self.filename,
-            std::str::from_utf8(&padding[0..(padding_len as usize)+1]).unwrap(),
+            std::str::from_utf8(&padding).unwrap(),
         )?;
         Ok((CPIO_HEADER_LENGTH + filename_len + padding_len).into())
+    }
+
+    pub fn write<W: Write>(&self, file: &mut W) -> Result<u64> {
+        self.write_with_alignment(file, None, 0)
     }
 }
 
@@ -258,6 +282,16 @@ fn hex_str_to_u32(bytes: &[u8]) -> Result<u32> {
         )),
         Ok(value) => Ok(value),
     }
+}
+
+fn align_padlen(written: u64, alignment: u32) -> u32 {
+    let padding_len = alignment - u32::try_from(written % u64::from(alignment)).unwrap();
+    if padding_len == alignment {
+        return 0;
+    }
+    padding_len
+    //let padding = vec![0u8; padding_len.try_into().unwrap()];
+    //writer.write_all(&padding)
 }
 
 fn read_filename<R: Read>(archive: &mut R, namesize: u32) -> Result<String> {

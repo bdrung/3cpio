@@ -21,6 +21,7 @@ use threecpio::{
 struct Args {
     count: bool,
     create: bool,
+    data_alignment: Option<u32>,
     directory: String,
     examine: bool,
     extract: bool,
@@ -90,6 +91,7 @@ fn print_version() {
 fn parse_args() -> Result<Args, lexopt::Error> {
     let mut count = 0;
     let mut create = 0;
+    let mut data_alignment = None;
     let mut examine = 0;
     let mut extract = 0;
     let mut force = false;
@@ -115,6 +117,15 @@ fn parse_args() -> Result<Args, lexopt::Error> {
             }
             Short('C') | Long("directory") => {
                 directory = parser.value()?.string()?;
+            }
+            Long("data-align") => {
+                let value = parser.value()?;
+                //let int_value = value.parse().map_err(lexopt::Error::Custom(Err(format!("--data-align must be an integer"))))?;
+                data_alignment = if let Ok(int_value) = value.parse() {
+                    Some(int_value)
+                } else {
+                    return Err("--data-align must be an integer".into());
+                };
             }
             Long("debug") => {
                 log_level = LOG_LEVEL_DEBUG;
@@ -197,6 +208,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     Ok(Args {
         count: count == 1,
         create: create == 1,
+        data_alignment,
         directory,
         examine: examine == 1,
         extract: extract == 1,
@@ -284,7 +296,7 @@ fn main() -> ExitCode {
             );
             return ExitCode::FAILURE;
         }
-        let result = create_cpio_archive(archive, args.log_level);
+        let result = create_cpio_archive(archive, args.data_alignment, args.log_level);
         if let Err(error) = result {
             match error.kind() {
                 ErrorKind::BrokenPipe => {}
