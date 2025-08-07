@@ -236,6 +236,22 @@ fn test_examine_compressed_cpio() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_extract_parts_to_stdout() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("-x")
+        .arg("-P")
+        .arg("2-")
+        .arg("--to-stdout")
+        .arg("tests/zstd.cpio");
+
+    cmd.output()?
+        .assert_stderr("")
+        .assert_success()
+        .assert_stdout("This is a fake busybox binary to simulate a POSIX shell\n");
+    Ok(())
+}
+
+#[test]
 fn test_examine_single_cpio() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-e").arg("tests/single.cpio");
@@ -328,6 +344,18 @@ fn test_list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
             .assert_success()
             .assert_stdout(".\npath\npath/file\n.\nusr\nusr/bin\nusr/bin/sh\n");
     }
+    Ok(())
+}
+
+#[test]
+fn test_list_content_parts_compressed_cpio() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("-t").arg("--parts=1").arg("tests/xz.cpio");
+
+    cmd.output()?
+        .assert_stderr("")
+        .assert_success()
+        .assert_stdout(".\npath\npath/file\n");
     Ok(())
 }
 

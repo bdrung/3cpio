@@ -10,6 +10,7 @@ use std::process::ExitCode;
 use glob::Pattern;
 use lexopt::prelude::*;
 
+use threecpio::ranges::Ranges;
 use threecpio::{
     create_cpio_archive, examine_cpio_content, extract_cpio_archive, list_cpio_content,
     print_cpio_archive_count, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING,
@@ -26,6 +27,7 @@ struct Args {
     list: bool,
     log_level: u32,
     archive: Option<String>,
+    parts: Option<Ranges>,
     patterns: Vec<Pattern>,
     preserve_permissions: bool,
     subdir: Option<String>,
@@ -39,8 +41,8 @@ fn print_help() {
     {executable} --count ARCHIVE
     {executable} {{-c|--create}} [-v|--debug] [-C DIR] [ARCHIVE] < manifest
     {executable} {{-e|--examine}} ARCHIVE
-    {executable} {{-t|--list}} [-v|--debug] ARCHIVE [pattern...]
-    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-p] [-s NAME] [--to-stdout] [--force] ARCHIVE [pattern...]
+    {executable} {{-t|--list}} [-v|--debug] [-P LIST] ARCHIVE [pattern...]
+    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-P LIST] [-p] [-s NAME] [--to-stdout] [--force] ARCHIVE [pattern...]
 
 Optional arguments:
   --count        Print the number of concatenated cpio archives.
@@ -49,6 +51,7 @@ Optional arguments:
   -t, --list     List the contents of the cpio archives.
   -x, --extract  Extract cpio archives.
   -C, --directory=DIR  Change directory before performing any operation.
+  -P, --parts=LIST  Only operate on the cpio archives that matches LIST.
   -p, --preserve-permissions
                  Set permissions of extracted files to those recorded in the
                  archive (default for superuser).
@@ -75,6 +78,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     let mut examine = 0;
     let mut extract = 0;
     let mut force = false;
+    let mut parts = None;
     let mut preserve_permissions = is_root();
     let mut list = 0;
     let mut log_level = LOG_LEVEL_WARNING;
@@ -108,6 +112,9 @@ fn parse_args() -> Result<Args, lexopt::Error> {
             Short('h') | Long("help") => {
                 print_help();
                 std::process::exit(0);
+            }
+            Short('P') | Long("parts") => {
+                parts = Some(parser.value()?.parse()?);
             }
             Short('p') | Long("preserve-permissions") => {
                 preserve_permissions = true;
@@ -178,6 +185,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         list: list == 1,
         log_level,
         archive,
+        parts,
         patterns,
         preserve_permissions,
         subdir,
@@ -306,6 +314,7 @@ fn main() -> ExitCode {
             "extract content",
             extract_cpio_archive(
                 archive,
+                args.parts.as_ref(),
                 args.patterns,
                 args.preserve_permissions,
                 args.subdir,
@@ -316,7 +325,13 @@ fn main() -> ExitCode {
     } else if args.list {
         (
             "list content",
-            list_cpio_content(archive, &mut stdout, &args.patterns, args.log_level),
+            list_cpio_content(
+                archive,
+                &mut stdout,
+                args.parts.as_ref(),
+                &args.patterns,
+                args.log_level,
+            ),
         )
     } else {
         unreachable!("no operation specified");

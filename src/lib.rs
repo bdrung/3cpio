@@ -17,6 +17,7 @@ use crate::filetype::*;
 use crate::header::Header;
 use crate::libc::{mknod, set_modified, strftime_local};
 use crate::manifest::Manifest;
+use crate::ranges::Ranges;
 use crate::seek_forward::SeekForward;
 
 mod compression;
@@ -25,6 +26,7 @@ mod filetype;
 mod header;
 mod libc;
 mod manifest;
+pub mod ranges;
 mod seek_forward;
 pub mod temp_dir;
 
@@ -763,6 +765,7 @@ pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<
 
 pub fn extract_cpio_archive<W: Write>(
     mut archive: File,
+    parts: Option<&Ranges>,
     patterns: Vec<Pattern>,
     preserve_permissions: bool,
     subdir: Option<String>,
@@ -777,6 +780,13 @@ pub fn extract_cpio_archive<W: Write>(
             None => return Ok(()),
             Some(x) => x?,
         };
+        if parts.is_some_and(|f| !f.contains(&count)) {
+            if compression.is_uncompressed() && parts.unwrap().has_more(&count) {
+                seek_to_cpio_end(&mut archive)?;
+                continue;
+            }
+            break;
+        }
         let mut dir = base_dir.clone();
         if let Some(ref s) = subdir {
             dir.push(format!("{s}{count}"));
@@ -811,6 +821,7 @@ pub fn extract_cpio_archive<W: Write>(
 pub fn list_cpio_content<W: Write>(
     mut archive: File,
     out: &mut W,
+    parts: Option<&Ranges>,
     patterns: &Vec<Pattern>,
     log_level: u32,
 ) -> Result<()> {
@@ -821,11 +832,20 @@ pub fn list_cpio_content<W: Write>(
         .as_secs()
         .try_into()
         .unwrap();
+    let mut count = 0;
     loop {
+        count += 1;
         let compression = match read_magic_header(&mut archive) {
             None => return Ok(()),
             Some(x) => x?,
         };
+        if parts.is_some_and(|f| !f.contains(&count)) {
+            if compression.is_uncompressed() && parts.unwrap().has_more(&count) {
+                seek_to_cpio_end(&mut archive)?;
+                continue;
+            }
+            break;
+        }
         if compression.is_uncompressed() {
             if log_level >= LOG_LEVEL_INFO {
                 read_cpio_and_print_long_format(
@@ -976,6 +996,24 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_cpio_archive_compressed_parts_to_stdout() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let archive = File::open("tests/lzma.cpio").unwrap();
+        let mut output = Vec::new();
+        extract_cpio_archive(
+            archive,
+            Some(&"-1".parse::<Ranges>().unwrap()),
+            Vec::new(),
+            false,
+            None,
+            Some(&mut output),
+            LOG_LEVEL_WARNING,
+        )
+        .unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), "content\n");
+    }
+
+    #[test]
     fn test_extract_cpio_archive_with_subdir() {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open("tests/single.cpio").unwrap();
@@ -983,6 +1021,7 @@ mod tests {
         set_current_dir(&tempdir.path).unwrap();
         extract_cpio_archive(
             archive,
+            None,
             Vec::new(),
             false,
             Some("cpio".into()),
@@ -1001,6 +1040,7 @@ mod tests {
         let mut output = Vec::new();
         extract_cpio_archive(
             archive,
+            None,
             Vec::new(),
             false,
             None,
@@ -1023,6 +1063,7 @@ mod tests {
         set_current_dir(&tempdir.path).unwrap();
         extract_cpio_archive(
             archive,
+            None,
             patterns,
             false,
             None,
@@ -1042,6 +1083,7 @@ mod tests {
         let mut output = Vec::new();
         extract_cpio_archive(
             archive,
+            None,
             patterns,
             false,
             None,
@@ -1064,6 +1106,7 @@ mod tests {
         set_current_dir(&tempdir.path).unwrap();
         extract_cpio_archive(
             archive,
+            None,
             patterns,
             false,
             None,
@@ -1076,12 +1119,31 @@ mod tests {
     }
 
     #[test]
+    fn test_list_cpio_content_compressed_parts() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let archive = File::open("tests/lzop.cpio").unwrap();
+        let mut output = Vec::new();
+        list_cpio_content(
+            archive,
+            &mut output,
+            Some(&"2-".parse::<Ranges>().unwrap()),
+            &Vec::new(),
+            LOG_LEVEL_WARNING,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            ".\nusr\nusr/bin\nusr/bin/sh\n"
+        );
+    }
+
+    #[test]
     fn test_list_cpio_content_compressed_with_pattern() {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open("tests/xz.cpio").unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
         let mut output = Vec::new();
-        list_cpio_content(archive, &mut output, &patterns, LOG_LEVEL_WARNING).unwrap();
+        list_cpio_content(archive, &mut output, None, &patterns, LOG_LEVEL_WARNING).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "path\n");
     }
 
@@ -1091,7 +1153,7 @@ mod tests {
         let archive = File::open("tests/single.cpio").unwrap();
         let patterns = vec![Pattern::new("*/file").unwrap()];
         let mut output = Vec::new();
-        list_cpio_content(archive, &mut output, &patterns, LOG_LEVEL_WARNING).unwrap();
+        list_cpio_content(archive, &mut output, None, &patterns, LOG_LEVEL_WARNING).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "path/file\n");
     }
 

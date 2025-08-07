@@ -18,9 +18,9 @@ Benjamin Drung
 
 *3cpio* {*-e*|*--examine*} _ARCHIVE_
 
-*3cpio* {*-t*|*--list*} [*-v*|*--debug*] _ARCHIVE_ [_pattern_...]
+*3cpio* {*-t*|*--list*} [*-v*|*--debug*] [*-P* _LIST_] _ARCHIVE_ [_pattern_...]
 
-*3cpio* {*-x*|*--extract*} [*-v*|*--debug*] [*-C* _DIR_] [*-p*] [*-s* _NAME_]
+*3cpio* {*-x*|*--extract*} [*-v*|*--debug*] [*-C* _DIR_] [*-P* _LIST_] [*-p*] [*-s* _NAME_]
 [*--to-stdout*] [*--force*] _ARCHIVE_ [_pattern_...]
 
 *3cpio* {*-V*|*--version*}
@@ -80,6 +80,17 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
 *-C* _DIR_, *--directory*=_DIR_::
   Change directory before performing any operation, but after opening the _ARCHIVE_.
   This option is only taken into account in the *--extract* mode.
+
+*-P* _LIST_, *--parts* _LIST_::
+  Only operate on the cpio archives that matches _LIST_.
+  This option is only taken into account in the *--list* and *--extract* modes.
+  _LIST_ is made up of one range, or many ranges separated by commas.
+  Each range is one of:
+
+  N::: N'th cpio archive, counted from 1
+  N-::: from N'th (included) to last cpio archive
+  N-M::: from N'th to M'th (included) cpio archive
+  -M::: from first to M'th (included) cpio archive
 
 *-p*, *--preserve-permissions*::
   Set permissions of extracted files to those recorded in the archive (default
