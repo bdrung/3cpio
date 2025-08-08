@@ -1364,7 +1364,7 @@ mod tests {
             .unwrap();
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
-        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        let read = written_file.read_to_end(&mut output).unwrap();
         assert_eq!(
             output,
             b"BZh31AY&SY\x12<\x9e\xb3\0\0\
@@ -1387,7 +1387,7 @@ mod tests {
             .unwrap();
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
-        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        let read = written_file.read_to_end(&mut output).unwrap();
         assert_eq!(
             output,
             b"\x1f\x8b\x08\0\0\0\0\0\0\x03307070\
@@ -1409,7 +1409,7 @@ mod tests {
             .unwrap();
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
-        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        let read = written_file.read_to_end(&mut output).unwrap();
         assert_eq!(
             output,
             b"\x02!L\x18$\0\0\0\x7f0707010\
@@ -1431,7 +1431,7 @@ mod tests {
             .unwrap();
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
-        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        let read = written_file.read_to_end(&mut output).unwrap();
         assert_eq!(
             output,
             b"]\0\0\x10\0\xff\xff\xff\xff\xff\xff\xff\xff\0\x18\x0d\
@@ -1453,7 +1453,7 @@ mod tests {
             .unwrap();
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
-        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        let read = written_file.read_to_end(&mut output).unwrap();
         // The lzop magic is 9 bytes long. Then follows: 3x 16-bit version fields,
         // 2x 8-bit method and level, 2x 32-bit flags and mode, and 64-bit mtime.
         // Then follows the filename (8-bit size) and then the 32-bit CRC32 checksum.
@@ -1484,7 +1484,7 @@ mod tests {
             .unwrap();
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
-        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        let read = written_file.read_to_end(&mut output).unwrap();
         assert_eq!(
             output,
             b"\xfd7zXZ\0\0\x01i\"\xde6\x02\0!\x01\
@@ -1508,7 +1508,7 @@ mod tests {
             .unwrap();
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
-        let read: usize = written_file.read_to_end(&mut output).unwrap();
+        let read = written_file.read_to_end(&mut output).unwrap();
         assert_eq!(
             output,
             b"(\xb5/\xfd\x04P\x15\x01\0\xc8070701\
