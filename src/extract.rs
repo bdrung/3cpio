@@ -3,7 +3,8 @@
 
 use std::collections::BTreeMap;
 use std::fs::{
-    create_dir, hard_link, remove_file, set_permissions, symlink_metadata, File, OpenOptions,
+    create_dir, create_dir_all, hard_link, remove_file, set_permissions, symlink_metadata, File,
+    OpenOptions,
 };
 use std::io::{prelude::*, Error, ErrorKind, Result};
 use std::os::unix::fs::{chown, fchown, lchown, symlink};
@@ -25,6 +26,7 @@ use crate::{
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExtractOptions {
+    make_directories: bool,
     parts: Option<Ranges>,
     patterns: Vec<Pattern>,
     preserve_permissions: bool,
@@ -33,12 +35,14 @@ pub struct ExtractOptions {
 
 impl ExtractOptions {
     pub fn new(
+        make_directories: bool,
         parts: Option<Ranges>,
         patterns: Vec<Pattern>,
         preserve_permissions: bool,
         subdir: Option<String>,
     ) -> Self {
         Self {
+            make_directories,
             parts,
             patterns,
             preserve_permissions,
@@ -49,7 +53,7 @@ impl ExtractOptions {
 
 impl Default for ExtractOptions {
     fn default() -> Self {
-        Self::new(None, Vec::new(), false, None)
+        Self::new(false, None, Vec::new(), false, None)
     }
 }
 
@@ -211,6 +215,9 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
             // parent directory. Skip the path traversal check in case the absolute
             // parent directory has no symlinks and matches the previouly checked directory.
             if absdir != previous_checked_dir {
+                if options.make_directories {
+                    create_dir_all(&absdir)?;
+                }
                 previous_checked_dir =
                     check_path_is_canonical_subdir(&header.filename, &absdir, base_dir)?;
             }
@@ -535,10 +542,25 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_cpio_archive_compressed_make_directories_with_pattern() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let archive = File::open(tests_path("lz4.cpio")).unwrap();
+        let tempdir = TempDir::new_and_set_current_dir().unwrap();
+        let patterns = vec![Pattern::new("p?th/f*").unwrap()];
+        let options = ExtractOptions::new(true, None, patterns, false, None);
+
+        extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
+        assert!(tempdir.path.join("path").is_dir());
+        assert!(tempdir.path.join("path/file").exists());
+        assert!(!tempdir.path.join("usr").exists());
+    }
+
+    #[test]
     fn test_extract_cpio_archive_compressed_parts_to_stdout() {
         let archive = File::open(tests_path("lzma.cpio")).unwrap();
         let mut output = Vec::new();
         let options = ExtractOptions::new(
+            false,
             Some("-1".parse::<Ranges>().unwrap()),
             Vec::new(),
             false,
@@ -566,7 +588,7 @@ mod tests {
         let archive = File::open(tests_path("zstd.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
-        let options = ExtractOptions::new(None, patterns, false, None);
+        let options = ExtractOptions::new(false, None, patterns, false, None);
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
@@ -577,7 +599,7 @@ mod tests {
         let archive = File::open(tests_path("gzip.cpio")).unwrap();
         let patterns: Vec<Pattern> = vec![Pattern::new("*/b?n/sh").unwrap()];
         let mut output = Vec::new();
-        let options = ExtractOptions::new(None, patterns, false, None);
+        let options = ExtractOptions::new(false, None, patterns, false, None);
         extract_cpio_archive(archive, Some(&mut output), &options, LOG_LEVEL_WARNING).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
@@ -591,7 +613,7 @@ mod tests {
         let archive = File::open(tests_path("single.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("path").unwrap()];
-        let options = ExtractOptions::new(None, patterns, false, None);
+        let options = ExtractOptions::new(false, None, patterns, false, None);
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
@@ -602,7 +624,7 @@ mod tests {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open(tests_path("single.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
-        let options = ExtractOptions::new(None, Vec::new(), false, Some("cpio".into()));
+        let options = ExtractOptions::new(false, None, Vec::new(), false, Some("cpio".into()));
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
         let path = tempdir.path.join("cpio1/path/file");
         assert!(path.exists());

@@ -81,6 +81,10 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
   Change directory before performing any operation, but after opening the _ARCHIVE_.
   This option is only taken into account in the *--extract* mode.
 
+*--make-directories*:
+  Create leading directories where needed.
+  This option is only taken into account in the *--extract* mode.
+
 *-P* _LIST_, *--parts* _LIST_::
   Only operate on the cpio archives that matches _LIST_.
   This option is only taken into account in the *--list* and *--extract* modes.

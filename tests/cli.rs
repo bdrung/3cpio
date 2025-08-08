@@ -252,6 +252,26 @@ fn test_extract_parts_to_stdout() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_extract_make_directories_with_pattern() -> Result<(), Box<dyn Error>> {
+    let tempdir = TempDir::new()?;
+    let mut cmd = get_command();
+    cmd.arg("-x")
+        .arg("-C")
+        .arg(&tempdir.path)
+        .arg("--make-directories")
+        .arg("-v")
+        .arg("tests/zstd.cpio")
+        .arg("path/file");
+
+    cmd.output()?
+        .assert_stderr("path/file\n")
+        .assert_success()
+        .assert_stdout("");
+    assert!(tempdir.path.join("path/file").exists());
+    Ok(())
+}
+
+#[test]
 fn test_examine_single_cpio() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-e").arg("tests/single.cpio");

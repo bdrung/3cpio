@@ -28,6 +28,7 @@ struct Args {
     list: bool,
     log_level: u32,
     archive: Option<String>,
+    make_directories: bool,
     parts: Option<Ranges>,
     patterns: Vec<Pattern>,
     preserve_permissions: bool,
@@ -38,6 +39,7 @@ struct Args {
 impl Args {
     fn extract_options(&self) -> ExtractOptions {
         ExtractOptions::new(
+            self.make_directories,
             self.parts.clone(),
             self.patterns.clone(),
             self.preserve_permissions,
@@ -54,7 +56,7 @@ fn print_help() {
     {executable} {{-c|--create}} [-v|--debug] [-C DIR] [ARCHIVE] < manifest
     {executable} {{-e|--examine}} ARCHIVE
     {executable} {{-t|--list}} [-v|--debug] [-P LIST] ARCHIVE [pattern...]
-    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [-P LIST] [-p] [-s NAME] [--to-stdout] [--force] ARCHIVE [pattern...]
+    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [--make-directories] [-P LIST] [-p] [-s NAME] [--to-stdout] [--force] ARCHIVE [pattern...]
 
 Optional arguments:
   --count        Print the number of concatenated cpio archives.
@@ -63,6 +65,7 @@ Optional arguments:
   -t, --list     List the contents of the cpio archives.
   -x, --extract  Extract cpio archives.
   -C, --directory=DIR  Change directory before performing any operation.
+  --make-directories   Create leading directories where needed.
   -P, --parts=LIST  Only operate on the cpio archives that matches LIST.
   -p, --preserve-permissions
                  Set permissions of extracted files to those recorded in the
@@ -96,6 +99,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     let mut log_level = LOG_LEVEL_WARNING;
     let mut directory = ".".into();
     let mut archive = None;
+    let mut make_directories = false;
     let mut patterns = Vec::new();
     let mut subdir: Option<String> = None;
     let mut to_stdout = false;
@@ -124,6 +128,9 @@ fn parse_args() -> Result<Args, lexopt::Error> {
             Short('h') | Long("help") => {
                 print_help();
                 std::process::exit(0);
+            }
+            Long("make-directories") => {
+                make_directories = true;
             }
             Short('P') | Long("parts") => {
                 parts = Some(parser.value()?.parse()?);
@@ -197,6 +204,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         list: list == 1,
         log_level,
         archive,
+        make_directories,
         parts,
         patterns,
         preserve_permissions,
