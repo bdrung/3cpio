@@ -1,6 +1,25 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.9.0 (2025-08-09)
+------------------
+
+### What's new
+
+* support extract/list cpio based on globbing patterns
+* support `--to-stdout` on extraction
+* limit compression level to min/max (instead of ignoring invalid levels)
+* support `--parts` on `--extract` and `--list`
+  ([issue #14](https://github.com/bdrung/3cpio/issues/14))
+* add `--make-directories` option for `--extract`
+* build: enable t64 on 32-bits architectures
+
+### Fixed
+
+* test:
+  - manifest: allow for EPIPE as a valid compression failure mode
+  - set current directory only if needed (to avoid race conditions)
+
 0.8.1 (2025-07-31)
 ------------------
 
