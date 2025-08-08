@@ -62,6 +62,12 @@ impl From<RangeTo<i32>> for Range {
     }
 }
 
+/// An array of ranges.
+///
+/// Each range can either be
+/// * bounded inclusively below and above (`start-end`),
+/// * bounded inclusively below (`start-`), or
+/// * bounded exclusively above (`-end`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ranges(Vec<Range>);
 
@@ -71,6 +77,18 @@ impl Ranges {
         Self(ranges)
     }
 
+    /// Returns `true` if `item` is contained in at least of of the ranges.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use threecpio::ranges::Ranges;
+    ///
+    /// assert!(!"3-4".parse::<Ranges>().unwrap().contains(&2));
+    /// assert!( "3-4".parse::<Ranges>().unwrap().contains(&3));
+    /// assert!( "3-4".parse::<Ranges>().unwrap().contains(&4));
+    /// assert!(!"3-4".parse::<Ranges>().unwrap().contains(&5));
+    /// ```
     pub fn contains(&self, item: &i32) -> bool {
         for range in &self.0 {
             if range.contains(item) {
@@ -80,6 +98,25 @@ impl Ranges {
         false
     }
 
+    /// Returns `true` if `Ranges` contain items higher than `item`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use threecpio::ranges::Ranges;
+    ///
+    /// assert!( "2-4".parse::<Ranges>().unwrap().has_more(&3));
+    /// assert!(!"2-4".parse::<Ranges>().unwrap().has_more(&4));
+    /// ```
+    ///
+    /// Ranges bounded inclusively below will cause `has_more` to always
+    /// return `true`:
+    ///
+    /// ```
+    /// use threecpio::ranges::Ranges;
+    ///
+    /// assert!("3-".parse::<Ranges>().unwrap().has_more(&9000));
+    /// ```
     pub fn has_more(&self, item: &i32) -> bool {
         for range in &self.0 {
             if range.has_more(item) {
@@ -93,6 +130,22 @@ impl Ranges {
 impl FromStr for Ranges {
     type Err = ParseIntError;
 
+    /// Parses a string `s` to return `Ranges`.
+    ///
+    /// `s` is made up of one range, or many ranges separated by commas.
+    /// Each range can either be
+    /// * one single item (`item`),
+    /// * bounded inclusively below and above (`start-end`),
+    /// * bounded inclusively below (`start-`), or
+    /// * bounded exclusively above (`-end`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use threecpio::ranges::Ranges;
+    ///
+    /// assert!("1-3,5,7-".parse::<Ranges>().is_ok());
+    /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut ranges = Vec::new();
         for range_str in s.split(",") {
