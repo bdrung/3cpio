@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: ISC
 
 use std::fs::File;
-use std::io::{Error, ErrorKind, Result};
+use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 use std::process::{Child, ChildStdout, Command, Stdio};
 
 #[derive(Debug, PartialEq)]
@@ -291,6 +291,32 @@ impl Compression {
     pub fn is_uncompressed(&self) -> bool {
         matches!(self, Self::Uncompressed)
     }
+}
+
+pub fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Compression>> {
+    let mut buffer = [0; 4];
+    while buffer == [0, 0, 0, 0] {
+        match file.read_exact(&mut buffer) {
+            Ok(()) => {}
+            Err(e) => match e.kind() {
+                ErrorKind::UnexpectedEof => return None,
+                _ => return Some(Err(e)),
+            },
+        };
+    }
+    match file.seek(SeekFrom::Current(-4)) {
+        Ok(_) => {}
+        Err(e) => {
+            return Some(Err(e));
+        }
+    };
+    let compression = match Compression::from_magic_number(buffer) {
+        Ok(compression) => compression,
+        Err(e) => {
+            return Some(Err(e));
+        }
+    };
+    Some(Ok(compression))
 }
 
 #[cfg(test)]

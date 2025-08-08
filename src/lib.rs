@@ -5,14 +5,14 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs::{
     create_dir, hard_link, remove_file, set_permissions, symlink_metadata, File, OpenOptions,
 };
-use std::io::{prelude::*, Error, ErrorKind, Result, SeekFrom};
+use std::io::{prelude::*, Error, ErrorKind, Result};
 use std::os::unix::fs::{chown, fchown, lchown, symlink};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use glob::Pattern;
 
-use crate::compression::Compression;
+use crate::compression::read_magic_header;
 use crate::filetype::*;
 use crate::header::Header;
 use crate::libc::{mknod, set_modified, strftime_local};
@@ -152,32 +152,6 @@ fn read_filename_from_next_cpio_object<R: Read + SeekForward>(archive: &mut R) -
     let skip = filesize + align_to_4_bytes(filesize);
     archive.seek_forward(skip.into())?;
     Ok(filename)
-}
-
-fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Compression>> {
-    let mut buffer = [0; 4];
-    while buffer == [0, 0, 0, 0] {
-        match file.read_exact(&mut buffer) {
-            Ok(()) => {}
-            Err(e) => match e.kind() {
-                ErrorKind::UnexpectedEof => return None,
-                _ => return Some(Err(e)),
-            },
-        };
-    }
-    match file.seek(SeekFrom::Current(-4)) {
-        Ok(_) => {}
-        Err(e) => {
-            return Some(Err(e));
-        }
-    };
-    let compression = match Compression::from_magic_number(buffer) {
-        Ok(compression) => compression,
-        Err(e) => {
-            return Some(Err(e));
-        }
-    };
-    Some(Ok(compression))
 }
 
 fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
@@ -883,7 +857,7 @@ pub fn list_cpio_content<W: Write>(
 #[cfg(test)]
 mod tests {
     use std::env;
-    use std::io::Stdout;
+    use std::io::{SeekFrom, Stdout};
     use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 
     use super::*;
