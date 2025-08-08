@@ -10,10 +10,11 @@ use std::process::ExitCode;
 use glob::Pattern;
 use lexopt::prelude::*;
 
+use threecpio::extract::extract_cpio_archive;
 use threecpio::ranges::Ranges;
 use threecpio::{
-    create_cpio_archive, examine_cpio_content, extract_cpio_archive, list_cpio_content,
-    print_cpio_archive_count, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING,
+    create_cpio_archive, examine_cpio_content, list_cpio_content, print_cpio_archive_count,
+    LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING,
 };
 
 #[derive(Debug)]
