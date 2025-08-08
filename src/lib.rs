@@ -891,7 +891,7 @@ mod tests {
     use crate::temp_dir::TempDir;
 
     // Lock for tests that rely on / change the current directory
-    static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
+    pub static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
 
     fn getgid() -> u32 {
         unsafe { ::libc::getgid() }

@@ -732,6 +732,7 @@ mod tests {
 
     use super::*;
     use crate::temp_dir::TempDir;
+    use crate::tests::TEST_LOCK;
     use crate::LOG_LEVEL_WARNING;
 
     pub fn make_temp_dir_with_hardlinks() -> Result<TempDir> {
@@ -1061,6 +1062,7 @@ mod tests {
 
     #[test]
     fn test_file_from_line_location_relative_directory() {
+        let _lock = TEST_LOCK.lock().unwrap();
         let line = "./tests\t\t\t510\t7\t42";
         let stat = symlink_metadata("tests").unwrap();
         let mtime = stat.mtime().try_into().unwrap();
