@@ -557,8 +557,9 @@ impl Archive {
         &self,
         output_file: &mut W,
         source_date_epoch: Option<u32>,
+        mut size: u64,
         log_level: u32,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         let mut next_ino = 0;
         let mut hardlink_ino = HashMap::new();
         let mut header;
@@ -575,17 +576,22 @@ impl Archive {
             if log_level >= LOG_LEVEL_DEBUG {
                 writeln!(std::io::stderr(), "{header:?}")?;
             };
-            header.write(output_file)?;
+            size += header.write(output_file)?;
             match &file.filetype {
                 Filetype::Hardlink { key, index: _ } => {
                     if header.filesize > 0 {
                         let hardlink = self.hardlinks.get(key).unwrap();
-                        copy_file_with_padding(&hardlink.location, hardlink.filesize, output_file)?;
+                        size += copy_file_with_padding(
+                            &hardlink.location,
+                            hardlink.filesize,
+                            output_file,
+                        )?;
                     }
                 }
                 Filetype::Symlink { target } => {
                     output_file.write_all(target.as_bytes())?;
-                    write_padding(output_file, header.filesize)?;
+                    size += u64::try_from(target.len()).unwrap();
+                    size += write_padding(output_file, header.filesize)?;
                 }
                 Filetype::EmptyFile
                 | Filetype::Directory
@@ -595,8 +601,8 @@ impl Archive {
                 | Filetype::Socket => {}
             }
         }
-        Header::trailer().write(output_file)?;
-        Ok(())
+        size += Header::trailer().write(output_file)?;
+        Ok(size)
     }
 }
 
@@ -662,12 +668,14 @@ impl Manifest {
         Ok(())
     }
 
+    // Return the size in bytes of the uncompressed data.
     pub fn write_archive(
         self,
         mut file: Option<std::fs::File>,
         source_date_epoch: Option<u32>,
         log_level: u32,
-    ) -> Result<()> {
+    ) -> Result<u64> {
+        let mut size = 0;
         if let Some(file) = file.as_ref() {
             self.apply_umask(file)?;
         }
@@ -675,16 +683,16 @@ impl Manifest {
             if archive.compression.is_uncompressed() {
                 if let Some(file) = file.as_mut() {
                     let mut writer = BufWriter::new(file);
-                    archive.write(&mut writer, source_date_epoch, log_level)?;
+                    size = archive.write(&mut writer, source_date_epoch, size, log_level)?;
                     writer.flush()?;
                 } else {
                     let mut stdout = std::io::stdout().lock();
-                    archive.write(&mut stdout, source_date_epoch, log_level)?;
+                    size = archive.write(&mut stdout, source_date_epoch, size, log_level)?;
                 }
             } else {
                 let mut compressor = archive.compression.compress(file, source_date_epoch)?;
                 let mut writer = BufWriter::new(compressor.stdin.as_ref().unwrap());
-                archive.write(&mut writer, source_date_epoch, log_level)?;
+                size = archive.write(&mut writer, source_date_epoch, size, log_level)?;
                 writer.flush()?;
                 drop(writer);
                 let exit_status = compressor.wait()?;
@@ -698,31 +706,32 @@ impl Manifest {
                 break;
             }
         }
-        Ok(())
+        Ok(size)
     }
 }
 
-fn copy_file_with_padding<W: Write>(path: &str, filesize: u32, writer: &mut W) -> Result<()> {
+fn copy_file_with_padding<W: Write>(path: &str, filesize: u32, writer: &mut W) -> Result<u64> {
     let file = std::fs::File::open(path).map_err(|e| e.add_prefix(path))?;
     let mut reader = std::io::BufReader::new(file);
-    let copied_bytes = std::io::copy(&mut reader, writer)?;
+    let mut copied_bytes = std::io::copy(&mut reader, writer)?;
     if copied_bytes != filesize.into() {
         return Err(Error::new(
             ErrorKind::UnexpectedEof,
             format!("Copied {copied_bytes} bytes from {path} but expected {filesize} bytes."),
         ));
     }
-    write_padding(writer, filesize)?;
-    Ok(())
+    copied_bytes += write_padding(writer, filesize)?;
+    Ok(copied_bytes)
 }
 
-pub fn write_padding<W: Write>(file: &mut W, written_bytes: u32) -> Result<()> {
+pub fn write_padding<W: Write>(file: &mut W, written_bytes: u32) -> Result<u64> {
     let padding_len = align_to_4_bytes(written_bytes);
     if padding_len == 0 {
-        return Ok(());
+        return Ok(0);
     }
     let padding = vec![0u8; padding_len.try_into().unwrap()];
-    file.write_all(&padding)
+    file.write_all(&padding)?;
+    Ok(padding_len.into())
 }
 
 #[cfg(test)]
@@ -1359,9 +1368,10 @@ mod tests {
         let input = b"#cpio: bzip2 -3\n";
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
-        manifest
+        let size = manifest
             .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
+        assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
         let read = written_file.read_to_end(&mut output).unwrap();
@@ -1382,9 +1392,10 @@ mod tests {
         let input = b"#cpio: gzip -7\n";
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
-        manifest
+        let size = manifest
             .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
+        assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
         let read = written_file.read_to_end(&mut output).unwrap();
@@ -1404,9 +1415,10 @@ mod tests {
         let input = b"#cpio: lz4 -4\n";
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
-        manifest
+        let size = manifest
             .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
+        assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
         let read = written_file.read_to_end(&mut output).unwrap();
@@ -1426,9 +1438,10 @@ mod tests {
         let input = b"#cpio: lzma -1\n";
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
-        manifest
+        let size = manifest
             .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
+        assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
         let read = written_file.read_to_end(&mut output).unwrap();
@@ -1448,9 +1461,10 @@ mod tests {
         let input = b"#cpio: lzop -9\n";
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
-        manifest
+        let size = manifest
             .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
+        assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
         let read = written_file.read_to_end(&mut output).unwrap();
@@ -1479,9 +1493,10 @@ mod tests {
         let input = b"#cpio: xz -6\n";
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
-        manifest
+        let size = manifest
             .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
+        assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
         let read = written_file.read_to_end(&mut output).unwrap();
@@ -1503,9 +1518,10 @@ mod tests {
         let input = b"#cpio: zstd -2\n";
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
-        manifest
+        let size = manifest
             .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
+        assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
         let read = written_file.read_to_end(&mut output).unwrap();
@@ -1575,8 +1591,8 @@ mod tests {
             File::new(Filetype::EmptyFile, "fstab", 0x644, 0x339, 0x48, 0x6E44C280),
         ]);
         let mut output = Vec::new();
-        archive
-            .write(&mut output, Some(0x6B49D200), LOG_LEVEL_WARNING)
+        let size = archive
+            .write(&mut output, Some(0x6B49D200), 0, LOG_LEVEL_WARNING)
             .unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1605,6 +1621,7 @@ mod tests {
             00000000000000000000000000000000000000000000000B00000000\
             TRAILER!!!\0\0\0\0",
         );
+        assert_eq!(size, 952);
     }
 
     #[test]
@@ -1640,7 +1657,9 @@ mod tests {
             HashMap::from([(8921120, Hardlink::with_references(&path, 7, 2))]),
         );
         let mut output = Vec::new();
-        archive.write(&mut output, None, LOG_LEVEL_WARNING).unwrap();
+        let size = archive
+            .write(&mut output, None, 0, LOG_LEVEL_WARNING)
+            .unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
             "07070100000000000081A40000000100000002000000026861C7C5\
@@ -1653,5 +1672,6 @@ mod tests {
             00000000000000000000000000000000000000000000000B00000000\
             TRAILER!!!\0\0\0\0",
         );
+        assert_eq!(size, 356);
     }
 }

@@ -201,7 +201,7 @@ impl Header {
         seen_files.get(&self.ino_and_dev())
     }
 
-    pub fn write<W: Write>(&self, file: &mut W) -> Result<()> {
+    pub fn write<W: Write>(&self, file: &mut W) -> Result<u64> {
         // The filename needs to be terminated with \0.
         let filename_len: u32 = match (self.filename.len() + 1).try_into() {
             Ok(l) => l,
@@ -212,7 +212,7 @@ impl Header {
                 ))
             }
         };
-        let padding_len = align_to_4_bytes(CPIO_HEADER_LENGTH + filename_len) as usize;
+        let padding_len = align_to_4_bytes(CPIO_HEADER_LENGTH + filename_len);
         let padding = [0u8; 5];
         write!(
             file,
@@ -221,8 +221,9 @@ impl Header {
             self.mode, self.uid, self.gid, self.nlink, self.mtime, self.filesize,
             self.major, self.minor, self.rmajor, self.rminor,
             filename_len, self.filename,
-            std::str::from_utf8(&padding[0..padding_len+1]).unwrap(),
-        )
+            std::str::from_utf8(&padding[0..(padding_len as usize)+1]).unwrap(),
+        )?;
+        Ok((CPIO_HEADER_LENGTH + filename_len + padding_len).into())
     }
 }
 
@@ -310,12 +311,14 @@ mod tests {
 
         // Test writing the header and get the original data back
         let mut output = Vec::new();
-        header.write(&mut output).unwrap();
+        let mut size = header.write(&mut output).unwrap();
         output.write_all(b"content\0").unwrap();
+        size += 8;
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
             std::str::from_utf8(archive).unwrap(),
         );
+        assert_eq!(size, archive.len() as u64);
     }
 
     #[test]
@@ -347,13 +350,14 @@ mod tests {
             filename: "./directory_with_setuid".into(),
         };
         let mut output = Vec::new();
-        header.write(&mut output).unwrap();
+        let size = header.write(&mut output).unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
             "0707010000002A000047FF000003E8000007D10000000266865C3F00000000\
             00000003000000070000002A000000990000001800000000\
             ./directory_with_setuid\0\0\0",
         );
+        assert_eq!(size, 136);
     }
 
     #[test]
