@@ -23,6 +23,36 @@ use crate::{
     LOG_LEVEL_INFO,
 };
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExtractOptions {
+    parts: Option<Ranges>,
+    patterns: Vec<Pattern>,
+    preserve_permissions: bool,
+    subdir: Option<String>,
+}
+
+impl ExtractOptions {
+    pub fn new(
+        parts: Option<Ranges>,
+        patterns: Vec<Pattern>,
+        preserve_permissions: bool,
+        subdir: Option<String>,
+    ) -> Self {
+        Self {
+            parts,
+            patterns,
+            preserve_permissions,
+            subdir,
+        }
+    }
+}
+
+impl Default for ExtractOptions {
+    fn default() -> Self {
+        Self::new(None, Vec::new(), false, None)
+    }
+}
+
 struct Extractor {
     seen_files: SeenFiles,
     mtimes: BTreeMap<String, i64>,
@@ -100,11 +130,8 @@ fn create_dir_ignore_existing<P: AsRef<std::path::Path>>(path: P) -> Result<()> 
 
 pub fn extract_cpio_archive<W: Write>(
     mut archive: File,
-    parts: Option<&Ranges>,
-    patterns: Vec<Pattern>,
-    preserve_permissions: bool,
-    subdir: Option<String>,
     mut out: Option<&mut W>,
+    options: &ExtractOptions,
     log_level: u32,
 ) -> Result<()> {
     let mut count = 0;
@@ -115,38 +142,24 @@ pub fn extract_cpio_archive<W: Write>(
             None => return Ok(()),
             Some(x) => x?,
         };
-        if parts.is_some_and(|f| !f.contains(&count)) {
-            if compression.is_uncompressed() && parts.unwrap().has_more(&count) {
+        if options.parts.as_ref().is_some_and(|f| !f.contains(&count)) {
+            if compression.is_uncompressed() && options.parts.as_ref().unwrap().has_more(&count) {
                 seek_to_cpio_end(&mut archive)?;
                 continue;
             }
             break;
         }
         let mut dir = base_dir.clone();
-        if let Some(ref s) = subdir {
+        if let Some(ref s) = options.subdir {
             dir.push(format!("{s}{count}"));
             create_dir_ignore_existing(&dir)?;
             std::env::set_current_dir(&dir)?;
         }
         if compression.is_uncompressed() {
-            read_cpio_and_extract(
-                &mut archive,
-                &dir,
-                &patterns,
-                preserve_permissions,
-                &mut out,
-                log_level,
-            )?;
+            read_cpio_and_extract(&mut archive, &dir, &mut out, options, log_level)?;
         } else {
             let mut decompressed = compression.decompress(archive)?;
-            read_cpio_and_extract(
-                &mut decompressed,
-                &dir,
-                &patterns,
-                preserve_permissions,
-                &mut out,
-                log_level,
-            )?;
+            read_cpio_and_extract(&mut decompressed, &dir, &mut out, options, log_level)?;
             break;
         }
     }
@@ -160,9 +173,8 @@ fn from_mtime(mtime: u32) -> SystemTime {
 fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
     archive: &mut R,
     base_dir: &PathBuf,
-    patterns: &Vec<Pattern>,
-    preserve_permissions: bool,
     out: &mut Option<W>,
+    options: &ExtractOptions,
     log_level: u32,
 ) -> Result<()> {
     let mut extractor = Extractor::new();
@@ -183,7 +195,7 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
             writeln!(std::io::stderr(), "{header:?}")?;
         }
 
-        if !patterns.is_empty() && !filename_matches(&header.filename, patterns) {
+        if !options.patterns.is_empty() && !filename_matches(&header.filename, &options.patterns) {
             header.skip_file_content(archive)?;
             continue;
         }
@@ -235,23 +247,23 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
         } else {
             match header.mode & MODE_FILETYPE_MASK {
                 FILETYPE_CHARACTER_DEVICE => {
-                    write_character_device(&header, preserve_permissions, log_level)?
+                    write_character_device(&header, options.preserve_permissions, log_level)?
                 }
                 FILETYPE_DIRECTORY => write_directory(
                     &header,
-                    preserve_permissions,
+                    options.preserve_permissions,
                     log_level,
                     &mut extractor.mtimes,
                 )?,
                 FILETYPE_REGULAR_FILE => write_file(
                     archive,
                     &header,
-                    preserve_permissions,
+                    options.preserve_permissions,
                     &mut extractor.seen_files,
                     log_level,
                 )?,
                 FILETYPE_SYMLINK => {
-                    write_symbolic_link(archive, &header, preserve_permissions, log_level)?
+                    write_symbolic_link(archive, &header, options.preserve_permissions, log_level)?
                 }
                 FILETYPE_FIFO | FILETYPE_BLOCK_DEVICE | FILETYPE_SOCKET => {
                     unimplemented!(
@@ -526,16 +538,13 @@ mod tests {
     fn test_extract_cpio_archive_compressed_parts_to_stdout() {
         let archive = File::open(tests_path("lzma.cpio")).unwrap();
         let mut output = Vec::new();
-        extract_cpio_archive(
-            archive,
-            Some(&"-1".parse::<Ranges>().unwrap()),
+        let options = ExtractOptions::new(
+            Some("-1".parse::<Ranges>().unwrap()),
             Vec::new(),
             false,
             None,
-            Some(&mut output),
-            LOG_LEVEL_WARNING,
-        )
-        .unwrap();
+        );
+        extract_cpio_archive(archive, Some(&mut output), &options, LOG_LEVEL_WARNING).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "content\n");
     }
 
@@ -543,16 +552,8 @@ mod tests {
     fn test_extract_cpio_archive_compressed_to_stdout() {
         let archive = File::open(tests_path("bzip2.cpio")).unwrap();
         let mut output = Vec::new();
-        extract_cpio_archive(
-            archive,
-            None,
-            Vec::new(),
-            false,
-            None,
-            Some(&mut output),
-            LOG_LEVEL_WARNING,
-        )
-        .unwrap();
+        let options = ExtractOptions::default();
+        extract_cpio_archive(archive, Some(&mut output), &options, LOG_LEVEL_WARNING).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             "content\nThis is a fake busybox binary to simulate a POSIX shell\n"
@@ -565,16 +566,8 @@ mod tests {
         let archive = File::open(tests_path("zstd.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
-        extract_cpio_archive(
-            archive,
-            None,
-            patterns,
-            false,
-            None,
-            None::<&mut Stdout>,
-            LOG_LEVEL_WARNING,
-        )
-        .unwrap();
+        let options = ExtractOptions::new(None, patterns, false, None);
+        extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
     }
@@ -584,16 +577,8 @@ mod tests {
         let archive = File::open(tests_path("gzip.cpio")).unwrap();
         let patterns: Vec<Pattern> = vec![Pattern::new("*/b?n/sh").unwrap()];
         let mut output = Vec::new();
-        extract_cpio_archive(
-            archive,
-            None,
-            patterns,
-            false,
-            None,
-            Some(&mut output),
-            LOG_LEVEL_WARNING,
-        )
-        .unwrap();
+        let options = ExtractOptions::new(None, patterns, false, None);
+        extract_cpio_archive(archive, Some(&mut output), &options, LOG_LEVEL_WARNING).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             "This is a fake busybox binary to simulate a POSIX shell\n"
@@ -606,16 +591,8 @@ mod tests {
         let archive = File::open(tests_path("single.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("path").unwrap()];
-        extract_cpio_archive(
-            archive,
-            None,
-            patterns,
-            false,
-            None,
-            None::<&mut Stdout>,
-            LOG_LEVEL_WARNING,
-        )
-        .unwrap();
+        let options = ExtractOptions::new(None, patterns, false, None);
+        extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
     }
@@ -625,16 +602,8 @@ mod tests {
         let _lock = TEST_LOCK.lock().unwrap();
         let archive = File::open(tests_path("single.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
-        extract_cpio_archive(
-            archive,
-            None,
-            Vec::new(),
-            false,
-            Some("cpio".into()),
-            None::<&mut Stdout>,
-            LOG_LEVEL_WARNING,
-        )
-        .unwrap();
+        let options = ExtractOptions::new(None, Vec::new(), false, Some("cpio".into()));
+        extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
         let path = tempdir.path.join("cpio1/path/file");
         assert!(path.exists());
     }
@@ -648,9 +617,8 @@ mod tests {
         let got = read_cpio_and_extract(
             &mut archive,
             &tempdir.path,
-            &Vec::new(),
-            false,
             &mut None::<Stdout>,
+            &ExtractOptions::default(),
             LOG_LEVEL_WARNING,
         )
         .unwrap_err();
@@ -669,9 +637,8 @@ mod tests {
         read_cpio_and_extract(
             &mut archive,
             &base_dir,
-            &Vec::new(),
-            false,
             &mut Some(&mut output),
+            &ExtractOptions::default(),
             LOG_LEVEL_WARNING,
         )
         .unwrap();

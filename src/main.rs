@@ -10,7 +10,7 @@ use std::process::ExitCode;
 use glob::Pattern;
 use lexopt::prelude::*;
 
-use threecpio::extract::extract_cpio_archive;
+use threecpio::extract::{extract_cpio_archive, ExtractOptions};
 use threecpio::ranges::Ranges;
 use threecpio::{
     create_cpio_archive, examine_cpio_content, list_cpio_content, print_cpio_archive_count,
@@ -33,6 +33,17 @@ struct Args {
     preserve_permissions: bool,
     subdir: Option<String>,
     to_stdout: bool,
+}
+
+impl Args {
+    fn extract_options(&self) -> ExtractOptions {
+        ExtractOptions::new(
+            self.parts.clone(),
+            self.patterns.clone(),
+            self.preserve_permissions,
+            self.subdir.clone(),
+        )
+    }
 }
 
 fn print_help() {
@@ -315,11 +326,8 @@ fn main() -> ExitCode {
             "extract content",
             extract_cpio_archive(
                 archive,
-                args.parts.as_ref(),
-                args.patterns,
-                args.preserve_permissions,
-                args.subdir,
                 args.to_stdout.then_some(&mut stdout),
+                &args.extract_options(),
                 args.log_level,
             ),
         )

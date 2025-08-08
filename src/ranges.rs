@@ -5,7 +5,7 @@ use std::num::ParseIntError;
 use std::ops::{RangeFrom, RangeInclusive, RangeTo};
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct Range {
     start: Option<i32>,
     end: Option<i32>,
@@ -62,7 +62,7 @@ impl From<RangeTo<i32>> for Range {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Ranges(Vec<Range>);
 
 impl Ranges {
