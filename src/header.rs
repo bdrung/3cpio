@@ -186,12 +186,7 @@ impl Header {
     }
 
     pub fn skip_file_content<R: SeekForward>(&self, archive: &mut R) -> Result<()> {
-        if self.filesize == 0 {
-            return Ok(());
-        };
-        let skip = self.filesize + align_to_4_bytes(self.filesize);
-        archive.seek_forward(skip.into())?;
-        Ok(())
+        skip_file_content(archive, self.filesize)
     }
 
     pub fn try_get_hard_link_target<'a>(&self, seen_files: &'a SeenFiles) -> Option<&'a String> {
@@ -278,6 +273,14 @@ fn read_filename<R: Read>(archive: &mut R, namesize: u32) -> Result<String> {
     // TODO: propper name reading handling
     let filename = std::str::from_utf8(&filename_bytes).unwrap();
     Ok(filename.to_string())
+}
+
+fn skip_file_content<R: SeekForward>(archive: &mut R, filesize: u32) -> Result<()> {
+    if filesize == 0 {
+        return Ok(());
+    };
+    let skip = filesize + align_to_4_bytes(filesize);
+    archive.seek_forward(skip.into())
 }
 
 #[cfg(test)]
