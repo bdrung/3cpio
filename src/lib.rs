@@ -239,7 +239,7 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
 }
 
 // Does the given file name matches one of the globbing patterns?
-pub fn filename_matches(filename: &str, patterns: &Vec<Pattern>) -> bool {
+fn filename_matches(filename: &str, patterns: &Vec<Pattern>) -> bool {
     for pattern in patterns {
         if pattern.matches(filename) {
             return true;
@@ -248,7 +248,7 @@ pub fn filename_matches(filename: &str, patterns: &Vec<Pattern>) -> bool {
     false
 }
 
-pub fn seek_to_cpio_end(archive: &mut File) -> Result<()> {
+fn seek_to_cpio_end(archive: &mut File) -> Result<()> {
     let cpio = CpioFilenameReader { archive };
     for f in cpio {
         f?;
