@@ -14,7 +14,7 @@ generate_cpio() {
     input_dir="$1"
     find "$input_dir" -depth -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" {} \;
     { cd "$input_dir"; find .; } | LC_ALL=C sort \
-        | cpio --reproducible --quiet -o -H newc -D "$input_dir"
+        | cpio --owner "+0:+0" --reproducible --quiet -o -H newc -D "$input_dir"
 }
 
 cd "$(dirname "$0")"
