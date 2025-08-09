@@ -368,6 +368,29 @@ fn test_list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_list_content_compressed_cpio_verbose() -> Result<(), Box<dyn Error>> {
+    for compression in ["bzip2", "gzip", "lz4", "lzma", "lzop", "xz", "zstd"] {
+        let mut cmd = get_command();
+        cmd.arg("-tv").arg(format!("tests/{compression}.cpio"));
+        cmd.env("TZ", "UTC");
+
+        cmd.output()?
+            .assert_stderr("")
+            .assert_success()
+            .assert_stdout(
+                "drwxrwxr-x   2 root     root            0 Apr 14  2024 .\n\
+                 drwxrwxr-x   2 root     root            0 Apr 14  2024 path\n\
+                 -rw-rw-r--   1 root     root            8 Apr 14  2024 path/file\n\
+                 drwxrwxr-x   2 root     root            0 Apr 14  2024 .\n\
+                 drwxrwxr-x   2 root     root            0 Apr 14  2024 usr\n\
+                 drwxrwxr-x   2 root     root            0 Apr 14  2024 usr/bin\n\
+                 -rw-rw-r--   1 root     root           56 Apr 14  2024 usr/bin/sh\n",
+            );
+    }
+    Ok(())
+}
+
+#[test]
 fn test_list_content_parts_compressed_cpio() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-t").arg("--parts=1").arg("tests/xz.cpio");
@@ -388,6 +411,23 @@ fn test_list_content_single_cpio() -> Result<(), Box<dyn Error>> {
         .assert_stderr("")
         .assert_success()
         .assert_stdout(".\npath\npath/file\n");
+    Ok(())
+}
+
+#[test]
+fn test_list_content_single_cpio_verbose() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("-tv").arg("tests/single.cpio");
+    cmd.env("TZ", "UTC");
+
+    cmd.output()?
+        .assert_stderr("")
+        .assert_success()
+        .assert_stdout(
+            "drwxrwxr-x   2 root     root            0 Apr 14  2024 .\n\
+             drwxrwxr-x   2 root     root            0 Apr 14  2024 path\n\
+             -rw-rw-r--   1 root     root            8 Apr 14  2024 path/file\n",
+        );
     Ok(())
 }
 
