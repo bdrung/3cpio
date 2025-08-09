@@ -62,7 +62,7 @@ jobs:
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ matrix.toolchain }}
+          name: coverage-root
           path: ./lcov.info
 
   clippy:
