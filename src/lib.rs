@@ -10,7 +10,7 @@ use glob::Pattern;
 
 use crate::compression::read_magic_header;
 use crate::filetype::*;
-use crate::header::Header;
+use crate::header::{read_filename_from_next_cpio_object, Header};
 use crate::libc::strftime_local;
 use crate::manifest::Manifest;
 use crate::ranges::Ranges;
@@ -114,17 +114,6 @@ fn align_to_4_bytes(length: u32) -> u32 {
     } else {
         4 - unaligned
     }
-}
-
-/// Read only the file name from the next cpio object.
-///
-/// Read the next cpio object header, check the magic, skip the file data.
-/// Return the file name.
-fn read_filename_from_next_cpio_object<R: Read + SeekForward>(archive: &mut R) -> Result<String> {
-    let (filesize, filename) = Header::read_only_filesize_and_filename(archive)?;
-    let skip = filesize + align_to_4_bytes(filesize);
-    archive.seek_forward(skip.into())?;
-    Ok(filename)
 }
 
 fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
