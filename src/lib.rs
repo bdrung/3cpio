@@ -108,12 +108,18 @@ fn format_time(timestamp: u32, now: i64) -> Result<String> {
 type SeenFiles = HashMap<u128, String>;
 
 fn align_to_4_bytes(length: u32) -> u32 {
-    let unaligned = length % 4;
-    if unaligned == 0 {
-        0
-    } else {
-        4 - unaligned
+    padding_needed_for(length.into(), 4)
+}
+
+/// Returns the amount of padding needed after `offset` to ensure that the
+/// following address will be aligned to `alignment`.
+fn padding_needed_for(offset: u64, alignment: u32) -> u32 {
+    // The rem operation is expected smaller than the right-hand side
+    let misalignment = (offset % u64::from(alignment)) as u32;
+    if misalignment == 0 {
+        return 0;
     }
+    alignment - misalignment
 }
 
 fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
