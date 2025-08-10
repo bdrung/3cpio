@@ -222,6 +222,16 @@ impl Header {
         )?;
         Ok((CPIO_HEADER_LENGTH + filename_len + padding_len).into())
     }
+
+    pub fn write_file_data_padding<W: Write>(&self, file: &mut W) -> Result<u64> {
+        let padding_len = self.padding_needed_for_file_content();
+        if padding_len == 0 {
+            return Ok(0);
+        }
+        let padding = vec![0u8; padding_len.try_into().unwrap()];
+        file.write_all(&padding)?;
+        Ok(padding_len.into())
+    }
 }
 
 fn check_begins_with_cpio_magic_header(header: &[u8]) -> std::io::Result<()> {

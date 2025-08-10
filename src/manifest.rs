@@ -11,7 +11,7 @@ use crate::extended_error::ExtendedError;
 use crate::filetype::*;
 use crate::header::Header;
 use crate::libc::{major, minor};
-use crate::{align_to_4_bytes, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
+use crate::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
 
 #[derive(Debug, PartialEq)]
 struct Hardlink {
@@ -581,17 +581,14 @@ impl Archive {
                 Filetype::Hardlink { key, index: _ } => {
                     if header.filesize > 0 {
                         let hardlink = self.hardlinks.get(key).unwrap();
-                        size += copy_file_with_padding(
-                            &hardlink.location,
-                            hardlink.filesize,
-                            output_file,
-                        )?;
+                        size += copy_file(&hardlink.location, hardlink.filesize, output_file)?;
+                        size += header.write_file_data_padding(output_file)?;
                     }
                 }
                 Filetype::Symlink { target } => {
                     output_file.write_all(target.as_bytes())?;
                     size += u64::try_from(target.len()).unwrap();
-                    size += write_padding(output_file, header.filesize)?;
+                    size += header.write_file_data_padding(output_file)?;
                 }
                 Filetype::EmptyFile
                 | Filetype::Directory
@@ -710,28 +707,17 @@ impl Manifest {
     }
 }
 
-fn copy_file_with_padding<W: Write>(path: &str, filesize: u32, writer: &mut W) -> Result<u64> {
+fn copy_file<W: Write>(path: &str, filesize: u32, writer: &mut W) -> Result<u64> {
     let file = std::fs::File::open(path).map_err(|e| e.add_prefix(path))?;
     let mut reader = std::io::BufReader::new(file);
-    let mut copied_bytes = std::io::copy(&mut reader, writer)?;
+    let copied_bytes = std::io::copy(&mut reader, writer)?;
     if copied_bytes != filesize.into() {
         return Err(Error::new(
             ErrorKind::UnexpectedEof,
             format!("Copied {copied_bytes} bytes from {path} but expected {filesize} bytes."),
         ));
     }
-    copied_bytes += write_padding(writer, filesize)?;
     Ok(copied_bytes)
-}
-
-pub fn write_padding<W: Write>(file: &mut W, written_bytes: u32) -> Result<u64> {
-    let padding_len = align_to_4_bytes(written_bytes);
-    if padding_len == 0 {
-        return Ok(0);
-    }
-    let padding = vec![0u8; padding_len.try_into().unwrap()];
-    file.write_all(&padding)?;
-    Ok(padding_len.into())
 }
 
 #[cfg(test)]
@@ -1578,9 +1564,9 @@ mod tests {
             ),
             File::new(
                 Filetype::Symlink {
-                    target: "usr/bin".into(),
+                    target: "usr/sbin".into(),
                 },
-                "bin",
+                "sbin",
                 0o777,
                 0x336,
                 0x45,
@@ -1606,8 +1592,8 @@ mod tests {
             00000000000000000000000000002E0E00008C750000000800000000\
             console\0\0\0\
             070701000000030000A1FF00000336000000450000000162373894\
-            00000007000000000000000000000000000000000000000400000000\
-            bin\0\0\0usr/bin\0\
+            00000008000000000000000000000000000000000000000500000000\
+            sbin\0\0usr/sbin\
             07070100000004000011800000033700000046000000016862B88A\
             00000000000000000000000000000000000000000000000800000000\
             initctl\0\0\0\
