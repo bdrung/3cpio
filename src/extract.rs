@@ -19,10 +19,7 @@ use crate::header::Header;
 use crate::libc::{mknod, set_modified};
 use crate::ranges::Ranges;
 use crate::seek_forward::SeekForward;
-use crate::{
-    align_to_4_bytes, filename_matches, seek_to_cpio_end, SeenFiles, LOG_LEVEL_DEBUG,
-    LOG_LEVEL_INFO,
-};
+use crate::{filename_matches, seek_to_cpio_end, SeenFiles, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExtractOptions {
@@ -450,8 +447,7 @@ fn write_file_content<R: Read + SeekForward, W: Write>(
             header.filename, written, header.filesize
         )));
     }
-    let skip = align_to_4_bytes(header.filesize);
-    archive.seek_forward(skip.into())
+    header.skip_file_content_padding(archive)
 }
 
 fn write_symbolic_link<R: Read + SeekForward>(

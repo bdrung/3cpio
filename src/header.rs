@@ -183,6 +183,14 @@ impl Header {
         skip_file_content(archive, self.filesize)
     }
 
+    pub fn skip_file_content_padding<R: SeekForward>(&self, archive: &mut R) -> Result<()> {
+        let skip = self.padding_needed_for_file_content();
+        if skip == 0 {
+            return Ok(());
+        };
+        archive.seek_forward(skip.into())
+    }
+
     pub fn try_get_hard_link_target<'a>(&self, seen_files: &'a SeenFiles) -> Option<&'a String> {
         if self.nlink <= 1 {
             return None;
