@@ -107,15 +107,6 @@ fn format_time(timestamp: u32, now: i64) -> Result<String> {
 // TODO: Document hardlink structure
 type SeenFiles = HashMap<u128, String>;
 
-fn align_to_4_bytes(length: u32) -> u32 {
-    let unaligned = length % 4;
-    if unaligned == 0 {
-        0
-    } else {
-        4 - unaligned
-    }
-}
-
 fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
     archive: &mut R,
     out: &mut W,
@@ -411,16 +402,6 @@ mod tests {
             self.group_cache.insert(123, Some("whoopsie".into()));
             self.group_cache.insert(2000, None);
         }
-    }
-
-    #[test]
-    fn test_align_to_4_bytes() {
-        assert_eq!(align_to_4_bytes(110), 2);
-    }
-
-    #[test]
-    fn test_align_to_4_bytes_is_aligned() {
-        assert_eq!(align_to_4_bytes(32), 0);
     }
 
     #[test]
