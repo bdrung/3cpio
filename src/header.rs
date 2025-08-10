@@ -131,6 +131,10 @@ impl Header {
         ]
     }
 
+    fn padding_needed_for_file_content(&self) -> u32 {
+        align_to_4_bytes(self.filesize)
+    }
+
     pub fn permission(&self) -> Permissions {
         PermissionsExt::from_mode(self.mode & MODE_PERMISSION_MASK)
     }
@@ -166,7 +170,7 @@ impl Header {
     }
 
     pub fn read_symlink_target<R: Read>(&self, archive: &mut R) -> Result<String> {
-        let align = align_to_4_bytes(self.filesize);
+        let align = self.padding_needed_for_file_content();
         let mut target_bytes = vec![0u8; (self.filesize + align).try_into().unwrap()];
         archive.read_exact(&mut target_bytes)?;
         target_bytes.truncate(self.filesize.try_into().unwrap());
