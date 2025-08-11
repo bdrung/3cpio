@@ -1,6 +1,14 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.9.1 (2025-08-11)
+------------------
+
+### Fixed
+
+* limit filename length to `PATH_MAX`
+* Support running tests without lzop installed
+
 0.9.0 (2025-08-09)
 ------------------
 
