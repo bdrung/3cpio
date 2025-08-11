@@ -12,6 +12,7 @@ use crate::SeenFiles;
 const CPIO_ALIGNMENT: u32 = 4;
 const CPIO_HEADER_LENGTH: u32 = 110;
 const CPIO_MAGIC_NUMBER: [u8; 6] = *b"070701";
+const PATH_MAX: usize = 4096;
 
 #[derive(Debug, PartialEq)]
 pub struct Header {
@@ -201,15 +202,14 @@ impl Header {
 
     pub fn write<W: Write>(&self, file: &mut W) -> Result<u64> {
         // The filename needs to be terminated with \0.
-        let filename_len: u32 = match (self.filename.len() + 1).try_into() {
-            Ok(l) => l,
-            Err(_) => {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    format!("Path '{}' exceeds filename length limit", self.filename),
-                ))
-            }
-        };
+        let filename_len = self.filename.len().checked_add(1).unwrap();
+        if filename_len > PATH_MAX {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("Path '{}' exceeds filename length limit", self.filename),
+            ));
+        }
+        let filename_len: u32 = filename_len.try_into().unwrap();
         let padding_len =
             padding_needed_for((CPIO_HEADER_LENGTH + filename_len).into(), CPIO_ALIGNMENT);
         let padding = [0u8; 5];
@@ -403,6 +403,21 @@ mod tests {
             ./directory_with_setuid\0\0\0",
         );
         assert_eq!(size, 136);
+    }
+
+    #[test]
+    fn test_header_write_filename_too_long() {
+        let filename = format!("this/path/is/way/t{}/long", "o".repeat(5000));
+        let header = Header::new(
+            42, 0o43_777, 1000, 2000, 1, 1720081471, 0, 37, 153, &filename,
+        );
+        let mut output = Vec::new();
+        let got = header.write(&mut output).unwrap_err();
+        assert_eq!(got.kind(), ErrorKind::InvalidData);
+        assert_eq!(
+            got.to_string(),
+            format!("Path '{filename}' exceeds filename length limit")
+        );
     }
 
     #[test]
