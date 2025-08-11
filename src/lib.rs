@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     fn test_list_cpio_content_compressed_parts() {
-        let archive = File::open(tests_path("lzop.cpio")).unwrap();
+        let archive = File::open(tests_path("gzip.cpio")).unwrap();
         let mut output = Vec::new();
         list_cpio_content(
             archive,

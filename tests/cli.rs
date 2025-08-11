@@ -4,7 +4,7 @@
 use std::env;
 use std::error::Error;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::process::{Command, Output, Stdio};
 use std::time::SystemTime;
 
@@ -24,6 +24,12 @@ fn get_command() -> Command {
     let mut program = get_target_dir();
     program.push("3cpio");
     Command::new(program)
+}
+
+fn program_not_available(program: &str) -> bool {
+    let mut cmd = Command::new(program);
+    cmd.arg("--help");
+    cmd.output().is_err_and(|e| e.kind() == ErrorKind::NotFound)
 }
 
 trait ExitCodeAssertion {
@@ -224,6 +230,9 @@ fn test_count_unexpected_argument() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_examine_compressed_cpio() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzop", "xz", "zstd"] {
+        if program_not_available(compression) {
+            continue;
+        }
         let mut cmd = get_command();
         cmd.arg("-e").arg(format!("tests/{compression}.cpio"));
 
@@ -356,6 +365,9 @@ fn test_invalid_pattern() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzma", "lzop", "xz", "zstd"] {
+        if program_not_available(compression) {
+            continue;
+        }
         let mut cmd = get_command();
         cmd.arg("-t").arg(format!("tests/{compression}.cpio"));
 
@@ -370,6 +382,9 @@ fn test_list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_list_content_compressed_cpio_verbose() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzma", "lzop", "xz", "zstd"] {
+        if program_not_available(compression) {
+            continue;
+        }
         let mut cmd = get_command();
         cmd.arg("-tv").arg(format!("tests/{compression}.cpio"));
         cmd.env("TZ", "UTC");

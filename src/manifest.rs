@@ -1447,9 +1447,14 @@ mod tests {
         let input = b"#cpio: lzop -9\n";
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
-        let size = manifest
-            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
-            .unwrap();
+        let got = manifest.write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING);
+        if got
+            .as_ref()
+            .is_err_and(|e| e.to_string() == "Program 'lzop' not found in PATH.")
+        {
+            return;
+        }
+        let size = got.unwrap();
         assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
         let mut output = Vec::new();
