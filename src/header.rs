@@ -220,12 +220,11 @@ impl Header {
             padding = vec![0u8; (padding_len as usize) + 1];
         } else {
             let pad_filename = alignment.unwrap();
-            let pad_len = padding_needed_for(written + offset, pad_filename);
+            padding_len = padding_needed_for(written + offset, pad_filename);
             filename_len = filename_len
-                .checked_add(pad_len.try_into().unwrap())
+                .checked_add(padding_len.try_into().unwrap())
                 .unwrap();
-            padding = vec![0u8; (pad_len + 1).try_into().unwrap()];
-            padding_len = 0;
+            padding = vec![0u8; (padding_len + 1).try_into().unwrap()];
         }
         if filename_len > PATH_MAX {
             return Err(Error::new(
@@ -243,7 +242,7 @@ impl Header {
             filename_len, self.filename,
             std::str::from_utf8(&padding).unwrap(),
         )?;
-        Ok((CPIO_HEADER_LENGTH + filename_len + padding_len).into())
+        Ok(offset + u64::from(padding_len))
     }
 
     pub fn write_file_data_padding<W: Write>(&self, file: &mut W) -> Result<u64> {
