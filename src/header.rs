@@ -201,8 +201,32 @@ impl Header {
     }
 
     pub fn write<W: Write>(&self, file: &mut W) -> Result<u64> {
+        self.write_with_alignment(file, None, 0)
+    }
+
+    pub fn write_with_alignment<W: Write>(
+        &self,
+        file: &mut W,
+        alignment: Option<u32>,
+        written: u64,
+    ) -> Result<u64> {
         // The filename needs to be terminated with \0.
-        let filename_len = self.filename.len().checked_add(1).unwrap();
+        let mut filename_len = self.filename.len().checked_add(1).unwrap();
+        let offset = u64::from(CPIO_HEADER_LENGTH) + u64::try_from(filename_len).unwrap();
+        let padding_len;
+        let padding;
+        if alignment.is_none() || alignment.is_some_and(|a| self.filesize < a) {
+            padding_len = padding_needed_for(offset, CPIO_ALIGNMENT);
+            padding = vec![0u8; (padding_len as usize) + 1];
+        } else {
+            let pad_filename = alignment.unwrap();
+            let pad_len = padding_needed_for(written + offset, pad_filename);
+            filename_len = filename_len
+                .checked_add(pad_len.try_into().unwrap())
+                .unwrap();
+            padding = vec![0u8; (pad_len + 1).try_into().unwrap()];
+            padding_len = 0;
+        }
         if filename_len > PATH_MAX {
             return Err(Error::new(
                 ErrorKind::InvalidData,
@@ -210,9 +234,6 @@ impl Header {
             ));
         }
         let filename_len: u32 = filename_len.try_into().unwrap();
-        let padding_len =
-            padding_needed_for((CPIO_HEADER_LENGTH + filename_len).into(), CPIO_ALIGNMENT);
-        let padding = [0u8; 5];
         write!(
             file,
             "{}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}{:08X}00000000{}{}",
@@ -220,7 +241,7 @@ impl Header {
             self.mode, self.uid, self.gid, self.nlink, self.mtime, self.filesize,
             self.major, self.minor, self.rmajor, self.rminor,
             filename_len, self.filename,
-            std::str::from_utf8(&padding[0..(padding_len as usize)+1]).unwrap(),
+            std::str::from_utf8(&padding).unwrap(),
         )?;
         Ok((CPIO_HEADER_LENGTH + filename_len + padding_len).into())
     }

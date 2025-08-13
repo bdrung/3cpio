@@ -14,7 +14,8 @@ Benjamin Drung
 
 *3cpio* *--count* _ARCHIVE_
 
-*3cpio* {*-c*|*--create*} [*-v*|*--debug*] [*-C* _DIR_] [_ARCHIVE_] < _manifest_
+*3cpio* {*-c*|*--create*} [*-v*|*--debug*] [*-C* _DIR_] [*--data-align* _ALIGNMENT_]
+[_ARCHIVE_] < _manifest_
 
 *3cpio* {*-e*|*--examine*} _ARCHIVE_
 
@@ -76,6 +77,30 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
    Print help message.
 
 == Options
+
+*--data-align* _ALIGNMENT_::
+When creating a cpio archive, pad the cpio metadata to align the file data on
+_ALIGNMENT_ in bytes. This option is useful to reflink cpio file data on file
+systems that support reflinks.
+This padding/alignment will be skipped for files that are smaller than
+_ALIGNMENT_ and for cpio archives that are compressed.
+_ALIGNMENT_ must be a multiple of 4 bytes.
+This option is only taken into account in the *--create* mode.
++
+The resulting cpio archive may be highly fragmented, which can lead to performance
+degradation when reading/extracting the image from devices with slow random IO
+(e.g. spinning disk).
++
+**Note**: Using this option will "bend" the cpio newc spec a bit to inject
+zeros after the filename to provide data segment alignment. These zeros are
+accounted for in the namesize, but some applications may only expect a single
+zero-terminator (and 4 byte alignment). GNU cpio and Linux initramfs handle
+this fine as long as `PATH_MAX` is not exceeded.
++
+The following command can be used to determine the optimal tranfer size of the
+file system (where _$path_ is the path the cpio archive will be written to):
++
+  stat --file-system -c "%s" -- "$path"
 
 *-C* _DIR_, *--directory*=_DIR_::
   Change directory before performing any operation, but after opening the _ARCHIVE_.

@@ -207,6 +207,71 @@ fn test_create_cpio_file() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_create_data_align() -> Result<(), Box<dyn Error>> {
+    let temp_dir = TempDir::new()?;
+    let path = temp_dir.create("example.txt", b"This is just an example text file!\n")?;
+    let mut cmd = get_command();
+    cmd.args(["--create", "--data-align", "16"]);
+    let process = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+    let mut stdin = process.stdin.as_ref().unwrap();
+    let manifest =
+        format!("/usr\t\t\t\t\t\t1681992796\n{path}\tusr/file\t\t644\t3\t7\t1755046204\n");
+    stdin.write_all(manifest.as_bytes())?;
+    let output = process.wait_with_output()?;
+    assert_eq!(
+        std::str::from_utf8(&output.stdout).unwrap(),
+        "07070100000000000041ED00000000000000000000000264412C5C\
+        00000000000000000000000000000000000000000000000400000000\
+        usr\0\0\0\
+        07070100000001000081A4000000030000000700000001689BE13C\
+        00000023000000000000000000000000000000000000000E00000000\
+        usr/file\0\0\
+        \0\0\0\0\
+        This is just an example text file!\n\0\
+        070701000000000000000000000000000000000000000100000000\
+        00000000000000000000000000000000000000000000000B00000000\
+        TRAILER!!!\0\0\0\0",
+    );
+    Ok(())
+}
+
+#[test]
+fn test_create_data_align_negative_number() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.args(["--create", "--data-align", "-42", "/tmp/initrd"]);
+
+    cmd.output()?
+        .assert_failure(2)
+        .assert_stderr_contains("Error: --data-align must be a positive number")
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
+fn test_create_data_align_not_a_multiple_of_four() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.args(["--create", "--data-align", "7", "/tmp/initrd"]);
+
+    cmd.output()?
+        .assert_failure(2)
+        .assert_stderr_contains("Error: --data-align must be a multiple of 4 bytes")
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
+fn test_create_data_align_zero() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.args(["--create", "--data-align", "0", "/tmp/initrd"]);
+
+    cmd.output()?
+        .assert_failure(2)
+        .assert_stderr_contains("Error: --data-align must be a multiple of 4 bytes")
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
 fn test_count_cpio_archives() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--count").arg("tests/zstd.cpio");

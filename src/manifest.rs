@@ -556,6 +556,7 @@ impl Archive {
     fn write<W: Write>(
         &self,
         output_file: &mut W,
+        alignment: Option<u32>,
         source_date_epoch: Option<u32>,
         mut size: u64,
         log_level: u32,
@@ -576,7 +577,7 @@ impl Archive {
             if log_level >= LOG_LEVEL_DEBUG {
                 writeln!(std::io::stderr(), "{header:?}")?;
             };
-            size += header.write(output_file)?;
+            size += header.write_with_alignment(output_file, alignment, size)?;
             match &file.filetype {
                 Filetype::Hardlink { key, index: _ } => {
                     if header.filesize > 0 {
@@ -669,6 +670,7 @@ impl Manifest {
     pub fn write_archive(
         self,
         mut file: Option<std::fs::File>,
+        alignment: Option<u32>,
         source_date_epoch: Option<u32>,
         log_level: u32,
     ) -> Result<u64> {
@@ -680,16 +682,28 @@ impl Manifest {
             if archive.compression.is_uncompressed() {
                 if let Some(file) = file.as_mut() {
                     let mut writer = BufWriter::new(file);
-                    size = archive.write(&mut writer, source_date_epoch, size, log_level)?;
+                    size = archive.write(
+                        &mut writer,
+                        alignment,
+                        source_date_epoch,
+                        size,
+                        log_level,
+                    )?;
                     writer.flush()?;
                 } else {
                     let mut stdout = std::io::stdout().lock();
-                    size = archive.write(&mut stdout, source_date_epoch, size, log_level)?;
+                    size = archive.write(
+                        &mut stdout,
+                        alignment,
+                        source_date_epoch,
+                        size,
+                        log_level,
+                    )?;
                 }
             } else {
                 let mut compressor = archive.compression.compress(file, source_date_epoch)?;
                 let mut writer = BufWriter::new(compressor.stdin.as_ref().unwrap());
-                size = archive.write(&mut writer, source_date_epoch, size, log_level)?;
+                size = archive.write(&mut writer, None, source_date_epoch, size, log_level)?;
                 writer.flush()?;
                 drop(writer);
                 let exit_status = compressor.wait()?;
@@ -724,11 +738,23 @@ fn copy_file<W: Write>(path: &str, filesize: u32, writer: &mut W) -> Result<u64>
 mod tests {
     use std::fs::{canonicalize, hard_link};
     use std::io::Read;
+    use std::path::Path;
 
     use super::*;
     use crate::temp_dir::TempDir;
     use crate::tests::TEST_LOCK;
     use crate::LOG_LEVEL_WARNING;
+
+    fn create_text_file_in_tmpdir<P: AsRef<Path>>(
+        tempdir: &TempDir,
+        filename: P,
+        content: &[u8],
+    ) -> String {
+        let path = tempdir.path.join(filename);
+        let mut text_file = std::fs::File::create(&path).unwrap();
+        text_file.write_all(content).unwrap();
+        path.into_os_string().into_string().unwrap()
+    }
 
     pub fn make_temp_dir_with_hardlinks() -> Result<TempDir> {
         let temp_dir = TempDir::new()?;
@@ -1355,7 +1381,7 @@ mod tests {
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
         let size = manifest
-            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .write_archive(Some(file), None, Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
         assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
@@ -1379,7 +1405,7 @@ mod tests {
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
         let size = manifest
-            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .write_archive(Some(file), None, Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
         assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
@@ -1402,7 +1428,7 @@ mod tests {
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
         let size = manifest
-            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .write_archive(Some(file), None, Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
         assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
@@ -1425,7 +1451,7 @@ mod tests {
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
         let size = manifest
-            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .write_archive(Some(file), None, Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
         assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
@@ -1447,7 +1473,7 @@ mod tests {
         let input = b"#cpio: lzop -9\n";
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
-        let got = manifest.write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING);
+        let got = manifest.write_archive(Some(file), None, Some(1754439117), LOG_LEVEL_WARNING);
         if got
             .as_ref()
             .is_err_and(|e| e.to_string() == "Program 'lzop' not found in PATH.")
@@ -1485,7 +1511,7 @@ mod tests {
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
         let size = manifest
-            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .write_archive(Some(file), None, Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
         assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
@@ -1510,7 +1536,7 @@ mod tests {
         let manifest = Manifest::from_input(input.as_ref(), LOG_LEVEL_WARNING).unwrap();
         let file = std::fs::File::create(&path).unwrap();
         let size = manifest
-            .write_archive(Some(file), Some(1754439117), LOG_LEVEL_WARNING)
+            .write_archive(Some(file), None, Some(1754439117), LOG_LEVEL_WARNING)
             .unwrap();
         assert_eq!(size, 124);
         let mut written_file = std::fs::File::open(&path).unwrap();
@@ -1533,7 +1559,7 @@ mod tests {
         let manifest = Manifest::new(vec![archive], 0o022);
         let file = std::fs::File::create(temp_dir.path.join("initrd.img")).unwrap();
         let got = manifest
-            .write_archive(Some(file), None, LOG_LEVEL_WARNING)
+            .write_archive(Some(file), None, None, LOG_LEVEL_WARNING)
             .unwrap_err();
         assert!(
             matches!(got.kind(), ErrorKind::Other if got.to_string() == "false failed: exit status: 1")
@@ -1583,7 +1609,7 @@ mod tests {
         ]);
         let mut output = Vec::new();
         let size = archive
-            .write(&mut output, Some(0x6B49D200), 0, LOG_LEVEL_WARNING)
+            .write(&mut output, None, Some(0x6B49D200), 0, LOG_LEVEL_WARNING)
             .unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -1613,6 +1639,71 @@ mod tests {
             TRAILER!!!\0\0\0\0",
         );
         assert_eq!(size, 952);
+    }
+
+    #[test]
+    fn test_archive_write_aligned() {
+        let tempdir = TempDir::new().unwrap();
+        let example = create_text_file_in_tmpdir(
+            &tempdir,
+            "example.txt",
+            b"This is just an example text file!\n",
+        );
+        let small = create_text_file_in_tmpdir(&tempdir, "small.txt", b"shorter than alignment\n");
+        let mut hardlinks = HashMap::new();
+        hardlinks.insert(42, Hardlink::with_references(example, 35, 1));
+        hardlinks.insert(99, Hardlink::with_references(small, 23, 1));
+        let archive = Archive::with_files_and_hardlinks(
+            vec![
+                File::new(Filetype::Directory, ".", 0o755, 0x333, 0x42, 0x6841897B),
+                File::new(
+                    Filetype::Hardlink { key: 42, index: 1 },
+                    "example",
+                    0o644,
+                    0x339,
+                    0x48,
+                    0x6E44C280,
+                ),
+                File::new(
+                    Filetype::Hardlink { key: 99, index: 1 },
+                    "small.txt",
+                    0o644,
+                    0x339,
+                    0x48,
+                    0x6E44C280,
+                ),
+            ],
+            hardlinks,
+        );
+        let mut output = Vec::new();
+        let size = archive
+            .write(
+                &mut output,
+                Some(32),
+                Some(0x6B49D200),
+                0,
+                LOG_LEVEL_WARNING,
+            )
+            .unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "07070100000000000041ED0000033300000042000000026841897B\
+            00000000000000000000000000000000000000000000000200000000\
+            .\0\
+            07070100000001000081A40000033900000048000000016B49D200\
+            00000023000000000000000000000000000000000000002200000000\
+            example\0\0\0\
+            \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\
+            This is just an example text file!\n\0\
+            07070100000002000081A40000033900000048000000016B49D200\
+            00000017000000000000000000000000000000000000000A00000000\
+            small.txt\0\
+            shorter than alignment\n\0\
+            070701000000000000000000000000000000000000000100000000\
+            00000000000000000000000000000000000000000000000B00000000\
+            TRAILER!!!\0\0\0\0",
+        );
+        assert_eq!(size, 560);
     }
 
     #[test]
@@ -1649,7 +1740,7 @@ mod tests {
         );
         let mut output = Vec::new();
         let size = archive
-            .write(&mut output, None, 0, LOG_LEVEL_WARNING)
+            .write(&mut output, None, None, 0, LOG_LEVEL_WARNING)
             .unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),

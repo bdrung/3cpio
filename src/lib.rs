@@ -279,7 +279,11 @@ pub fn print_cpio_archive_count<W: Write>(mut archive: File, out: &mut W) -> Res
 }
 
 // Return the size in bytes of the uncompressed data.
-pub fn create_cpio_archive(archive: Option<File>, log_level: u32) -> Result<u64> {
+pub fn create_cpio_archive(
+    archive: Option<File>,
+    alignment: Option<u32>,
+    log_level: u32,
+) -> Result<u64> {
     let source_date_epoch = get_source_date_epoch();
     let stdin = std::io::stdin();
     let buf_reader = std::io::BufReader::new(stdin);
@@ -290,7 +294,7 @@ pub fn create_cpio_archive(archive: Option<File>, log_level: u32) -> Result<u64>
     if log_level >= LOG_LEVEL_DEBUG {
         eprintln!("Writing cpio...");
     }
-    manifest.write_archive(archive, source_date_epoch, log_level)
+    manifest.write_archive(archive, alignment, source_date_epoch, log_level)
 }
 
 pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<()> {

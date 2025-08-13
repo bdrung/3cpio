@@ -3,8 +3,8 @@
 
 use std::env::{self, current_dir, set_current_dir};
 use std::fs::File;
-use std::io::{Read, Result};
-use std::path::PathBuf;
+use std::io::{Read, Result, Write};
+use std::path::{Path, PathBuf};
 
 pub struct TempDir {
     /// Path of the temporary directory.
@@ -13,6 +13,14 @@ pub struct TempDir {
 }
 
 impl TempDir {
+    /// Create a file in the temporary directory and return full path.
+    pub fn create<P: AsRef<Path>>(&self, filename: P, content: &[u8]) -> Result<String> {
+        let path = self.path.join(filename);
+        let mut file = File::create(&path)?;
+        file.write_all(content)?;
+        Ok(path.into_os_string().into_string().unwrap())
+    }
+
     /// Creates a new temporary directory.
     ///
     /// This temporary directory and all the files it contains will be removed

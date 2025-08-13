@@ -21,6 +21,7 @@ use threecpio::{
 struct Args {
     count: bool,
     create: bool,
+    data_alignment: Option<u32>,
     directory: String,
     examine: bool,
     extract: bool,
@@ -53,7 +54,7 @@ fn print_help() {
     println!(
         "Usage:
     {executable} --count ARCHIVE
-    {executable} {{-c|--create}} [-v|--debug] [-C DIR] [ARCHIVE] < manifest
+    {executable} {{-c|--create}} [-v|--debug] [-C DIR] [--data-align BYTES] [ARCHIVE] < manifest
     {executable} {{-e|--examine}} ARCHIVE
     {executable} {{-t|--list}} [-v|--debug] [-P LIST] ARCHIVE [pattern...]
     {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [--make-directories] [-P LIST] [-p] [-s NAME] [--to-stdout] [--force] ARCHIVE [pattern...]
@@ -65,6 +66,7 @@ Optional arguments:
   -t, --list     List the contents of the cpio archives.
   -x, --extract  Extract cpio archives.
   -C, --directory=DIR  Change directory before performing any operation.
+  --data-align=BYTES   Pad the cpio metadata to align the file data on BYTEs.
   --make-directories   Create leading directories where needed.
   -P, --parts=LIST  Only operate on the cpio archives that matches LIST.
   -p, --preserve-permissions
@@ -90,6 +92,7 @@ fn print_version() {
 fn parse_args() -> Result<Args, lexopt::Error> {
     let mut count = 0;
     let mut create = 0;
+    let mut data_alignment = None;
     let mut examine = 0;
     let mut extract = 0;
     let mut force = false;
@@ -115,6 +118,17 @@ fn parse_args() -> Result<Args, lexopt::Error> {
             }
             Short('C') | Long("directory") => {
                 directory = parser.value()?.string()?;
+            }
+            Long("data-align") => {
+                let value = parser.value()?;
+                data_alignment = if let Ok(int_value) = value.parse() {
+                    if int_value % 4 != 0 || int_value == 0 {
+                        return Err("--data-align must be a multiple of 4 bytes".into());
+                    }
+                    Some(int_value)
+                } else {
+                    return Err("--data-align must be a positive number".into());
+                };
             }
             Long("debug") => {
                 log_level = LOG_LEVEL_DEBUG;
@@ -197,6 +211,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     Ok(Args {
         count: count == 1,
         create: create == 1,
+        data_alignment,
         directory,
         examine: examine == 1,
         extract: extract == 1,
@@ -284,7 +299,7 @@ fn main() -> ExitCode {
             );
             return ExitCode::FAILURE;
         }
-        let result = create_cpio_archive(archive, args.log_level);
+        let result = create_cpio_archive(archive, args.data_alignment, args.log_level);
         if let Err(error) = result {
             match error.kind() {
                 ErrorKind::BrokenPipe => {}
