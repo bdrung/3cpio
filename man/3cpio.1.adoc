@@ -83,7 +83,8 @@ When creating a cpio archive, pad the cpio metadata to align the file data on
 _ALIGNMENT_ in bytes. This option is useful to reflink cpio file data on file
 systems that support reflinks.
 This padding/alignment will be skipped for files that are smaller than
-_ALIGNMENT_ and for cpio archives that are compressed.
+_ALIGNMENT_, files where the padded namesize field would exceed `PATH_MAX`,
+and for cpio archives that are compressed.
 _ALIGNMENT_ must be a multiple of 4 bytes.
 This option is only taken into account in the *--create* mode.
 +

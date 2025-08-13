@@ -212,23 +212,29 @@ impl Header {
     ) -> Result<u64> {
         // The filename needs to be terminated with \0.
         let mut filename_len = self.filename.len().checked_add(1).unwrap();
-        let offset = u64::from(CPIO_HEADER_LENGTH) + u64::try_from(filename_len).unwrap();
-        let padding_len;
-        if alignment.is_some_and(|alignment| self.filesize >= alignment) {
-            padding_len = padding_needed_for(written + offset, alignment.unwrap());
-            filename_len = filename_len
-                .checked_add(padding_len.try_into().unwrap())
-                .unwrap();
-        } else {
-            padding_len = padding_needed_for(offset, CPIO_ALIGNMENT);
-        }
-        let padding = vec![0u8; (padding_len + 1).try_into().unwrap()];
         if filename_len > PATH_MAX {
             return Err(Error::new(
                 ErrorKind::InvalidData,
                 format!("Path '{}' exceeds filename length limit", self.filename),
             ));
         }
+        let offset = u64::from(CPIO_HEADER_LENGTH) + u64::try_from(filename_len).unwrap();
+        let mut padding_len;
+        if alignment.is_some_and(|alignment| self.filesize >= alignment) {
+            padding_len = padding_needed_for(written + offset, alignment.unwrap());
+            let filename_plus_alignment = filename_len
+                .checked_add(padding_len.try_into().unwrap())
+                .unwrap();
+            if filename_plus_alignment > PATH_MAX {
+                // Required padding exceeds namesize maximum. Use normal padding.
+                padding_len = padding_needed_for(offset, CPIO_ALIGNMENT);
+            } else {
+                filename_len = filename_plus_alignment;
+            }
+        } else {
+            padding_len = padding_needed_for(offset, CPIO_ALIGNMENT);
+        }
+        let padding = vec![0u8; (padding_len + 1).try_into().unwrap()];
         let filename_len: u32 = filename_len.try_into().unwrap();
         write!(
             file,
@@ -435,6 +441,44 @@ mod tests {
             got.to_string(),
             format!("Path '{filename}' exceeds filename length limit")
         );
+    }
+
+    #[test]
+    fn test_header_write_with_alignment_exceeds_path_max() {
+        let path = "usr/lib/modules/6.16.0-13-generic/modules.dep";
+        let header = Header::new(42, 0o100_644, 0xAA, 0xBB, 1, 0x689CD1CC, 917184, 0, 0, path);
+        let mut output = Vec::new();
+        let size = header
+            .write_with_alignment(&mut output, Some(PATH_MAX as u32), 3956)
+            .unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            "0707010000002A000081A4000000AA000000BB00000001689CD1CC\
+            000DFEC0000000000000000000000000000000000000002E00000000\
+            usr/lib/modules/6.16.0-13-generic/modules.dep\0",
+        );
+        assert_eq!(size, 156);
+    }
+
+    #[test]
+    fn test_header_write_with_alignment_near_path_max() {
+        let header = Header::new(
+            42, 0o100_644, 0xAA, 0xBB, 1, 0x689CD1CC, 917184, 0, 0, "data",
+        );
+        let mut output = Vec::new();
+        let size = header
+            .write_with_alignment(&mut output, Some(PATH_MAX as u32), 3988)
+            .unwrap();
+        assert_eq!(
+            std::str::from_utf8(&output).unwrap(),
+            format!(
+                "0707010000002A000081A4000000AA000000BB00000001689CD1CC\
+                000DFEC00000000000000000000000000000000000000FFE00000000\
+                data\0\0{}",
+                "\0".repeat(4088)
+            ),
+        );
+        assert_eq!(size, 4204);
     }
 
     #[test]
