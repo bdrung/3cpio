@@ -1,6 +1,13 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.10.2 (2025-08-13)
+-------------------
+
+### Fixed
+
+* skip data alignment for files where `PATH_MAX` is exceeded
+
 0.10.1 (2025-08-13)
 -------------------
 
