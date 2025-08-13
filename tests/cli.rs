@@ -272,6 +272,29 @@ fn test_create_data_align_zero() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_create_uncompressed_plus_zstd_on_stdout() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("--create");
+    let process = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+    let mut stdin = process.stdin.as_ref().unwrap();
+    stdin.write_all(b"#cpio\n/usr\t\t\t\t\t\t1681992796\n#cpio: zstd -2\n")?;
+    let output = process.wait_with_output()?;
+    assert_eq!(
+        output.stdout,
+        b"07070100000000000041ED00000000000000000000000264412C5C\
+        00000000000000000000000000000000000000000000000400000000\
+        usr\0\0\0\
+        070701000000000000000000000000000000000000000100000000\
+        00000000000000000000000000000000000000000000000B00000000\
+        TRAILER!!!\0\0\0\0\
+        (\xb5/\xfd\x04P\x15\x01\0\xc8070701\
+        010B0TRAILER!!!\0\
+        \0\0\0\x03\x10\0\x19\xde\x89?F\x95\xfb\x16m",
+    );
+    Ok(())
+}
+
+#[test]
 fn test_count_cpio_archives() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--count").arg("tests/zstd.cpio");

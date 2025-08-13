@@ -699,6 +699,7 @@ impl Manifest {
                         size,
                         log_level,
                     )?;
+                    stdout.flush()?;
                 }
             } else {
                 let mut compressor = archive.compression.compress(file, source_date_epoch)?;
