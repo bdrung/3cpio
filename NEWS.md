@@ -1,6 +1,13 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.10.0 (2025-08-13)
+-------------------
+
+### What's new
+
+* add `--data-align` option to the `--create` mode
+
 0.9.1 (2025-08-11)
 ------------------
 
