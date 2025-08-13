@@ -1,6 +1,13 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.10.1 (2025-08-13)
+-------------------
+
+### Fixed
+
+* flush stdout at the end of each cpio
+
 0.10.0 (2025-08-13)
 -------------------
 
