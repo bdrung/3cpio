@@ -214,17 +214,15 @@ impl Header {
         let mut filename_len = self.filename.len().checked_add(1).unwrap();
         let offset = u64::from(CPIO_HEADER_LENGTH) + u64::try_from(filename_len).unwrap();
         let padding_len;
-        let padding;
         if alignment.is_none() || alignment.is_some_and(|a| self.filesize < a) {
             padding_len = padding_needed_for(offset, CPIO_ALIGNMENT);
-            padding = vec![0u8; (padding_len as usize) + 1];
         } else {
             padding_len = padding_needed_for(written + offset, alignment.unwrap());
             filename_len = filename_len
                 .checked_add(padding_len.try_into().unwrap())
                 .unwrap();
-            padding = vec![0u8; (padding_len + 1).try_into().unwrap()];
         }
+        let padding = vec![0u8; (padding_len + 1).try_into().unwrap()];
         if filename_len > PATH_MAX {
             return Err(Error::new(
                 ErrorKind::InvalidData,
