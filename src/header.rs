@@ -219,8 +219,7 @@ impl Header {
             padding_len = padding_needed_for(offset, CPIO_ALIGNMENT);
             padding = vec![0u8; (padding_len as usize) + 1];
         } else {
-            let pad_filename = alignment.unwrap();
-            padding_len = padding_needed_for(written + offset, pad_filename);
+            padding_len = padding_needed_for(written + offset, alignment.unwrap());
             filename_len = filename_len
                 .checked_add(padding_len.try_into().unwrap())
                 .unwrap();
