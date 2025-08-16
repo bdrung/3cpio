@@ -98,7 +98,7 @@ accounted for in the namesize, but some applications may only expect a single
 zero-terminator (and 4 byte alignment). GNU cpio and Linux initramfs handle
 this fine as long as `PATH_MAX` is not exceeded.
 +
-The following command can be used to determine the optimal tranfer size of the
+The following command can be used to determine the optimal transfer size of the
 file system (where _$path_ is the path the cpio archive will be written to):
 +
   stat --file-system -c "%s" -- "$path"
