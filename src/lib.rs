@@ -379,6 +379,17 @@ pub fn list_cpio_content<W: Write>(
     Ok(())
 }
 
+/// Returns the amount of padding needed after `offset` to ensure that the
+/// following address will be aligned to `alignment`.
+fn padding_needed_for(offset: u64, alignment: u32) -> u32 {
+    // The rem operation is expected smaller than the right-hand side
+    let misalignment = (offset % u64::from(alignment)) as u32;
+    if misalignment == 0 {
+        return 0;
+    }
+    alignment - misalignment
+}
+
 #[cfg(test)]
 mod tests {
     use std::env;
@@ -389,6 +400,16 @@ mod tests {
 
     // Lock for tests that rely on / change the current directory
     pub static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
+
+    #[test]
+    fn test_padding_needed_for() {
+        assert_eq!(padding_needed_for(110, 4), 2);
+    }
+
+    #[test]
+    fn test_padding_needed_for_is_aligned() {
+        assert_eq!(padding_needed_for(32, 4), 0);
+    }
 
     pub fn tests_path<P: AsRef<Path>>(path: P) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))

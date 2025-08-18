@@ -7,7 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use crate::filetype::*;
 use crate::seek_forward::SeekForward;
-use crate::SeenFiles;
+use crate::{padding_needed_for, SeenFiles};
 
 const CPIO_ALIGNMENT: u32 = 4;
 const CPIO_HEADER_LENGTH: u32 = 110;
@@ -292,17 +292,6 @@ fn hex_str_to_u32(bytes: &[u8]) -> Result<u32> {
     }
 }
 
-/// Returns the amount of padding needed after `offset` to ensure that the
-/// following address will be aligned to `alignment`.
-fn padding_needed_for(offset: u64, alignment: u32) -> u32 {
-    // The rem operation is expected smaller than the right-hand side
-    let misalignment = (offset % u64::from(alignment)) as u32;
-    if misalignment == 0 {
-        return 0;
-    }
-    alignment - misalignment
-}
-
 fn read_filename<R: Read>(archive: &mut R, namesize: u32) -> Result<String> {
     let header_align = padding_needed_for((CPIO_HEADER_LENGTH + namesize).into(), CPIO_ALIGNMENT);
     let mut filename_bytes = vec![0u8; (namesize + header_align).try_into().unwrap()];
@@ -517,15 +506,5 @@ mod tests {
     fn test_is_root_directory_is_file() {
         let header = Header::new(0, 0o100_644, 0, 0, 1, 1744150584, 0, 0, 0, ".");
         assert!(!header.is_root_directory());
-    }
-
-    #[test]
-    fn test_padding_needed_for() {
-        assert_eq!(padding_needed_for(110, 4), 2);
-    }
-
-    #[test]
-    fn test_padding_needed_for_is_aligned() {
-        assert_eq!(padding_needed_for(32, 4), 0);
     }
 }
