@@ -381,7 +381,7 @@ pub fn list_cpio_content<W: Write>(
 
 /// Returns the amount of padding needed after `offset` to ensure that the
 /// following address will be aligned to `alignment`.
-fn padding_needed_for(offset: u64, alignment: u64) -> u64 {
+const fn padding_needed_for(offset: u64, alignment: u64) -> u64 {
     let misalignment = offset % alignment;
     if misalignment == 0 {
         return 0;
