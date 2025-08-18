@@ -9,7 +9,7 @@ use crate::filetype::*;
 use crate::seek_forward::SeekForward;
 use crate::{padding_needed_for, SeenFiles};
 
-const CPIO_ALIGNMENT: u32 = 4;
+const CPIO_ALIGNMENT: u64 = 4;
 const CPIO_HEADER_LENGTH: u32 = 110;
 const CPIO_MAGIC_NUMBER: [u8; 6] = *b"070701";
 const PATH_MAX: usize = 4096;
@@ -133,7 +133,7 @@ impl Header {
         ]
     }
 
-    fn padding_needed_for_file_content(&self) -> u32 {
+    fn padding_needed_for_file_content(&self) -> u64 {
         padding_needed_for(self.filesize.into(), CPIO_ALIGNMENT)
     }
 
@@ -154,7 +154,7 @@ impl Header {
         archive.read_exact(&mut buffer)?;
         check_begins_with_cpio_magic_header(&buffer)?;
         let namesize = hex_str_to_u32(&buffer[94..102])?;
-        let filename = read_filename(archive, namesize)?;
+        let filename = read_filename(archive, namesize.into())?;
         Ok(Self {
             ino: hex_str_to_u32(&buffer[6..14])?,
             mode: hex_str_to_u32(&buffer[14..22])?,
@@ -172,10 +172,11 @@ impl Header {
     }
 
     pub fn read_symlink_target<R: Read>(&self, archive: &mut R) -> Result<String> {
-        let align = self.padding_needed_for_file_content();
-        let mut target_bytes = vec![0u8; (self.filesize + align).try_into().unwrap()];
+        let align = usize::try_from(self.padding_needed_for_file_content()).unwrap();
+        let filesize = self.filesize.try_into().unwrap();
+        let mut target_bytes = vec![0u8; filesize + align];
         archive.read_exact(&mut target_bytes)?;
-        target_bytes.truncate(self.filesize.try_into().unwrap());
+        target_bytes.truncate(filesize);
         // TODO: propper name reading handling
         let target = std::str::from_utf8(&target_bytes).unwrap();
         Ok(target.into())
@@ -190,7 +191,7 @@ impl Header {
         if skip == 0 {
             return Ok(());
         };
-        archive.seek_forward(skip.into())
+        archive.seek_forward(skip)
     }
 
     pub fn try_get_hard_link_target<'a>(&self, seen_files: &'a SeenFiles) -> Option<&'a String> {
@@ -221,7 +222,7 @@ impl Header {
         let offset = u64::from(CPIO_HEADER_LENGTH) + u64::try_from(filename_len).unwrap();
         let mut padding_len;
         if alignment.is_some_and(|alignment| self.filesize >= alignment) {
-            padding_len = padding_needed_for(written + offset, alignment.unwrap());
+            padding_len = padding_needed_for(written + offset, alignment.unwrap().into());
             let filename_plus_alignment = filename_len
                 .checked_add(padding_len.try_into().unwrap())
                 .unwrap();
@@ -245,7 +246,7 @@ impl Header {
             filename_len, self.filename,
             std::str::from_utf8(&padding).unwrap(),
         )?;
-        Ok(offset + u64::from(padding_len))
+        Ok(offset + padding_len)
     }
 
     pub fn write_file_data_padding<W: Write>(&self, file: &mut W) -> Result<u64> {
@@ -255,7 +256,7 @@ impl Header {
         }
         let padding = vec![0u8; padding_len.try_into().unwrap()];
         file.write_all(&padding)?;
-        Ok(padding_len.into())
+        Ok(padding_len)
     }
 }
 
@@ -292,8 +293,8 @@ fn hex_str_to_u32(bytes: &[u8]) -> Result<u32> {
     }
 }
 
-fn read_filename<R: Read>(archive: &mut R, namesize: u32) -> Result<String> {
-    let header_align = padding_needed_for((CPIO_HEADER_LENGTH + namesize).into(), CPIO_ALIGNMENT);
+fn read_filename<R: Read>(archive: &mut R, namesize: u64) -> Result<String> {
+    let header_align = padding_needed_for(u64::from(CPIO_HEADER_LENGTH) + namesize, CPIO_ALIGNMENT);
     let mut filename_bytes = vec![0u8; (namesize + header_align).try_into().unwrap()];
     let filename_length: usize = (namesize - 1).try_into().unwrap();
     archive.read_exact(&mut filename_bytes)?;
@@ -324,7 +325,7 @@ pub fn read_filename_from_next_cpio_object<R: Read + SeekForward>(
     check_begins_with_cpio_magic_header(&header)?;
     let filesize = hex_str_to_u32(&header[54..62])?;
     let namesize = hex_str_to_u32(&header[94..102])?;
-    let filename = read_filename(archive, namesize)?;
+    let filename = read_filename(archive, namesize.into())?;
     skip_file_content(archive, filesize)?;
     Ok(filename)
 }
@@ -333,8 +334,8 @@ fn skip_file_content<R: SeekForward>(archive: &mut R, filesize: u32) -> Result<(
     if filesize == 0 {
         return Ok(());
     };
-    let skip = filesize + padding_needed_for(filesize.into(), CPIO_ALIGNMENT);
-    archive.seek_forward(skip.into())
+    let skip = u64::from(filesize) + padding_needed_for(filesize.into(), CPIO_ALIGNMENT);
+    archive.seek_forward(skip)
 }
 
 #[cfg(test)]
