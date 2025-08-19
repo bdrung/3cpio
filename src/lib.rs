@@ -27,6 +27,8 @@ pub mod ranges;
 mod seek_forward;
 pub mod temp_dir;
 
+const CPIO_ALIGNMENT: u64 = 4;
+const CPIO_HEADER_LENGTH: u32 = 110;
 pub const LOG_LEVEL_WARNING: u32 = 5;
 pub const LOG_LEVEL_INFO: u32 = 7;
 pub const LOG_LEVEL_DEBUG: u32 = 8;
