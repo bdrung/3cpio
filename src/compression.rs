@@ -172,8 +172,13 @@ impl Compression {
         }
     }
 
-    pub fn compress(&self, file: Option<File>, source_date_epoch: Option<u32>) -> Result<Child> {
-        let mut command = self.compress_command(source_date_epoch);
+    pub fn compress(
+        &self,
+        file: Option<File>,
+        source_date_epoch: Option<u32>,
+        size: impl FnOnce() -> u64,
+    ) -> Result<Child> {
+        let mut command = self.compress_command(source_date_epoch, size);
         // TODO: Propper error message if spawn fails
         command.stdin(Stdio::piped());
         if let Some(file) = file {
@@ -189,7 +194,11 @@ impl Compression {
         Ok(cmd)
     }
 
-    fn compress_command(&self, source_date_epoch: Option<u32>) -> Command {
+    fn compress_command(
+        &self,
+        source_date_epoch: Option<u32>,
+        size: impl FnOnce() -> u64,
+    ) -> Command {
         let mut command = Command::new(self.command());
         match self {
             Self::Gzip { level: _ } => {
@@ -245,6 +254,9 @@ impl Compression {
             && matches!(self, Self::Lzma { level: _ } | Self::Xz { level: _ })
         {
             command.arg("-T1");
+        }
+        if matches!(self, Self::Zstd { level: _ }) {
+            command.arg(format!("--stream-size={}", size()));
         }
         command
     }

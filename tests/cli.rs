@@ -145,7 +145,7 @@ fn test_create_compressed_cpio_on_stdout() -> Result<(), Box<dyn Error>> {
         .assert_stderr("Compression level 42 higher than maximum, reducing to 19.\n");
     assert_eq!(
         output.stdout,
-        b"(\xb5/\xfd\x04h\x0d\x02\0\x02\xc3\x0a\x11\x90M\x07\
+        b"(\xb5/\xfd$\xf0\x0d\x02\0\x02\xc3\x0a\x11\x90M\x07\
         \xa0\xff\x18S\x04G\xf3[\xc9\xb1\xef\x8eT\x06m\x0b\
         \0h\x8a-\xd3\xdc\xe7l\xfb`\\\x8c\x06\x0a)\x04\
         \x09'\x95\xe2\xbc\\\x0e\x08 \xc0s\x07\x19\xde\x89v\
@@ -287,7 +287,7 @@ fn test_create_uncompressed_plus_zstd_on_stdout() -> Result<(), Box<dyn Error>> 
         070701000000000000000000000000000000000000000100000000\
         00000000000000000000000000000000000000000000000B00000000\
         TRAILER!!!\0\0\0\0\
-        (\xb5/\xfd\x04P\x15\x01\0\xc8070701\
+        (\xb5/\xfd$|\x15\x01\0\xc8070701\
         010B0TRAILER!!!\0\
         \0\0\0\x03\x10\0\x19\xde\x89?F\x95\xfb\x16m",
     );

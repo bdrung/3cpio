@@ -33,6 +33,7 @@ pub const LOG_LEVEL_WARNING: u32 = 5;
 pub const LOG_LEVEL_INFO: u32 = 7;
 pub const LOG_LEVEL_DEBUG: u32 = 8;
 const TRAILER_FILENAME: &str = "TRAILER!!!";
+const TRAILER_SIZE: u64 = calculate_size(TRAILER_FILENAME, 0);
 
 struct CpioFilenameReader<'a, R: Read + SeekForward> {
     archive: &'a mut R,
@@ -380,6 +381,14 @@ pub fn list_cpio_content<W: Write>(
         }
     }
     Ok(())
+}
+
+/// Calculate the size of the header and file data plus the 4-byte padding
+const fn calculate_size(filename: &str, filesize: u64) -> u64 {
+    let filename_len = filename.len() as u64 + 1;
+    let mut size = CPIO_HEADER_LENGTH as u64 + filename_len;
+    size += padding_needed_for(size, CPIO_ALIGNMENT);
+    size + filesize + padding_needed_for(filesize, CPIO_ALIGNMENT)
 }
 
 /// Returns the amount of padding needed after `offset` to ensure that the

@@ -11,7 +11,10 @@ use crate::extended_error::ExtendedError;
 use crate::filetype::*;
 use crate::header::Header;
 use crate::libc::{major, minor};
-use crate::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
+use crate::{
+    calculate_size, padding_needed_for, CPIO_ALIGNMENT, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO,
+    TRAILER_SIZE,
+};
 
 #[derive(Debug, PartialEq)]
 struct Hardlink {
@@ -553,6 +556,31 @@ impl Archive {
         self.compression = compression;
     }
 
+    /// Calculate the size of the cpio archive (when using the standard 4-byte padding)
+    fn size(&self) -> u64 {
+        let mut size = 0;
+        for file in &self.files {
+            let filesize = match &file.filetype {
+                // Filesize of hardlinks are calculated later
+                Filetype::Hardlink { key: _, index: _ } => 0,
+                Filetype::Symlink { target } => u32::try_from(target.len()).unwrap(),
+                Filetype::EmptyFile
+                | Filetype::Directory
+                | Filetype::BlockDevice { major: _, minor: _ }
+                | Filetype::CharacterDevice { major: _, minor: _ }
+                | Filetype::Fifo
+                | Filetype::Socket => 0,
+            };
+            size += calculate_size(&file.name, filesize.into());
+        }
+        for hardlink in self.hardlinks.values() {
+            debug_assert!(hardlink.references > 0);
+            let filesize = hardlink.filesize.into();
+            size += filesize + padding_needed_for(filesize, CPIO_ALIGNMENT);
+        }
+        size + TRAILER_SIZE
+    }
+
     fn write<W: Write>(
         &self,
         output_file: &mut W,
@@ -702,7 +730,10 @@ impl Manifest {
                     stdout.flush()?;
                 }
             } else {
-                let mut compressor = archive.compression.compress(file, source_date_epoch)?;
+                let mut compressor =
+                    archive
+                        .compression
+                        .compress(file, source_date_epoch, || archive.size())?;
                 let mut writer = BufWriter::new(compressor.stdin.as_ref().unwrap());
                 size = archive.write(&mut writer, None, source_date_epoch, size, log_level)?;
                 writer.flush()?;
@@ -1545,7 +1576,7 @@ mod tests {
         let read = written_file.read_to_end(&mut output).unwrap();
         assert_eq!(
             output,
-            b"(\xb5/\xfd\x04P\x15\x01\0\xc8070701\
+            b"(\xb5/\xfd$|\x15\x01\0\xc8070701\
             010B0TRAILER!!!\0\
             \0\0\0\x03\x10\0\x19\xde\x89?F\x95\xfb\x16m"
         );
@@ -1640,6 +1671,7 @@ mod tests {
             TRAILER!!!\0\0\0\0",
         );
         assert_eq!(size, 952);
+        assert_eq!(archive.size(), 952);
     }
 
     #[test]
@@ -1705,6 +1737,7 @@ mod tests {
             TRAILER!!!\0\0\0\0",
         );
         assert_eq!(size, 560);
+        assert_eq!(archive.size(), 536);
     }
 
     #[test]
@@ -1756,5 +1789,6 @@ mod tests {
             TRAILER!!!\0\0\0\0",
         );
         assert_eq!(size, 356);
+        assert_eq!(archive.size(), 356);
     }
 }
