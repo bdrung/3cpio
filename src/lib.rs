@@ -30,6 +30,7 @@ pub mod temp_dir;
 pub const LOG_LEVEL_WARNING: u32 = 5;
 pub const LOG_LEVEL_INFO: u32 = 7;
 pub const LOG_LEVEL_DEBUG: u32 = 8;
+const TRAILER_FILENAME: &str = "TRAILER!!!";
 
 struct CpioFilenameReader<'a, R: Read + SeekForward> {
     archive: &'a mut R,
@@ -41,7 +42,7 @@ impl<R: Read + SeekForward> Iterator for CpioFilenameReader<'_, R> {
     fn next(&mut self) -> Option<Self::Item> {
         match read_filename_from_next_cpio_object(self.archive) {
             Ok(filename) => {
-                if filename == "TRAILER!!!" {
+                if filename == TRAILER_FILENAME {
                     None
                 } else {
                     Some(Ok(filename))

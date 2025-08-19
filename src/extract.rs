@@ -19,7 +19,10 @@ use crate::header::Header;
 use crate::libc::{mknod, set_modified};
 use crate::ranges::Ranges;
 use crate::seek_forward::SeekForward;
-use crate::{filename_matches, seek_to_cpio_end, SeenFiles, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
+use crate::{
+    filename_matches, seek_to_cpio_end, SeenFiles, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO,
+    TRAILER_FILENAME,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExtractOptions {
@@ -183,7 +186,7 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
     loop {
         let header = match Header::read(archive) {
             Ok(header) => {
-                if header.filename == "TRAILER!!!" {
+                if header.filename == TRAILER_FILENAME {
                     break;
                 } else {
                     header

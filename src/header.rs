@@ -7,7 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use crate::filetype::*;
 use crate::seek_forward::SeekForward;
-use crate::{padding_needed_for, SeenFiles};
+use crate::{padding_needed_for, SeenFiles, TRAILER_FILENAME};
 
 const CPIO_ALIGNMENT: u64 = 4;
 const CPIO_HEADER_LENGTH: u32 = 110;
@@ -76,7 +76,7 @@ impl Header {
             minor: 0,
             rmajor: 0,
             rminor: 0,
-            filename: "TRAILER!!!".into(),
+            filename: TRAILER_FILENAME.into(),
         }
     }
 
