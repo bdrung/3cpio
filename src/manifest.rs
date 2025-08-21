@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::fs::{symlink_metadata, Metadata};
 use std::io::{BufRead, BufWriter, Error, ErrorKind, Result, Write};
+use std::num::NonZeroU32;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 use crate::compression::Compression;
@@ -584,7 +585,7 @@ impl Archive {
     fn write<W: Write>(
         &self,
         output_file: &mut W,
-        alignment: Option<u32>,
+        alignment: Option<NonZeroU32>,
         source_date_epoch: Option<u32>,
         mut size: u64,
         log_level: u32,
@@ -698,7 +699,7 @@ impl Manifest {
     pub fn write_archive(
         self,
         mut file: Option<std::fs::File>,
-        alignment: Option<u32>,
+        alignment: Option<NonZeroU32>,
         source_date_epoch: Option<u32>,
         log_level: u32,
     ) -> Result<u64> {
@@ -1712,7 +1713,7 @@ mod tests {
         let size = archive
             .write(
                 &mut output,
-                Some(32),
+                NonZeroU32::new(32),
                 Some(0x6B49D200),
                 0,
                 LOG_LEVEL_WARNING,

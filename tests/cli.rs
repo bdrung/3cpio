@@ -266,7 +266,7 @@ fn test_create_data_align_zero() -> Result<(), Box<dyn Error>> {
 
     cmd.output()?
         .assert_failure(2)
-        .assert_stderr_contains("Error: --data-align must be a multiple of 4 bytes")
+        .assert_stderr_contains("Error: --data-align must be a positive number")
         .assert_stdout("");
     Ok(())
 }

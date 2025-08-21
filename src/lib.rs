@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{prelude::*, Result};
+use std::num::NonZeroU32;
 use std::time::SystemTime;
 
 use glob::Pattern;
@@ -285,7 +286,7 @@ pub fn print_cpio_archive_count<W: Write>(mut archive: File, out: &mut W) -> Res
 // Return the size in bytes of the uncompressed data.
 pub fn create_cpio_archive(
     archive: Option<File>,
-    alignment: Option<u32>,
+    alignment: Option<NonZeroU32>,
     log_level: u32,
 ) -> Result<u64> {
     let source_date_epoch = get_source_date_epoch();

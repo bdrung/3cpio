@@ -3,6 +3,7 @@
 
 use std::fs::Permissions;
 use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::num::NonZeroU32;
 use std::os::unix::fs::PermissionsExt;
 
 use crate::filetype::*;
@@ -206,7 +207,7 @@ impl Header {
     pub fn write_with_alignment<W: Write>(
         &self,
         file: &mut W,
-        alignment: Option<u32>,
+        alignment: Option<NonZeroU32>,
         written: u64,
     ) -> Result<u64> {
         // The filename needs to be terminated with \0.
@@ -219,8 +220,8 @@ impl Header {
         }
         let offset = u64::from(CPIO_HEADER_LENGTH) + u64::try_from(filename_len).unwrap();
         let mut padding_len;
-        if alignment.is_some_and(|alignment| self.filesize >= alignment) {
-            padding_len = padding_needed_for(written + offset, alignment.unwrap().into());
+        if alignment.is_some_and(|alignment| self.filesize >= alignment.into()) {
+            padding_len = padding_needed_for(written + offset, alignment.unwrap().get().into());
             let filename_plus_alignment = filename_len
                 .checked_add(padding_len.try_into().unwrap())
                 .unwrap();
@@ -437,7 +438,7 @@ mod tests {
         let header = Header::new(42, 0o100_644, 0xAA, 0xBB, 1, 0x689CD1CC, 917184, 0, 0, path);
         let mut output = Vec::new();
         let size = header
-            .write_with_alignment(&mut output, Some(PATH_MAX as u32), 3956)
+            .write_with_alignment(&mut output, NonZeroU32::new(PATH_MAX as u32), 3956)
             .unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),
@@ -455,7 +456,7 @@ mod tests {
         );
         let mut output = Vec::new();
         let size = header
-            .write_with_alignment(&mut output, Some(PATH_MAX as u32), 3988)
+            .write_with_alignment(&mut output, NonZeroU32::new(PATH_MAX as u32), 3988)
             .unwrap();
         assert_eq!(
             std::str::from_utf8(&output).unwrap(),

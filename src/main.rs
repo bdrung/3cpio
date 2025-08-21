@@ -4,6 +4,7 @@
 use std::env::set_current_dir;
 use std::fs::{create_dir, read_dir, File};
 use std::io::ErrorKind;
+use std::num::NonZeroU32;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -21,7 +22,7 @@ use threecpio::{
 struct Args {
     count: bool,
     create: bool,
-    data_alignment: Option<u32>,
+    data_alignment: Option<NonZeroU32>,
     directory: String,
     examine: bool,
     extract: bool,
@@ -121,8 +122,8 @@ fn parse_args() -> Result<Args, lexopt::Error> {
             }
             Long("data-align") => {
                 let value = parser.value()?;
-                data_alignment = if let Ok(int_value) = value.parse() {
-                    if int_value % 4 != 0 || int_value == 0 {
+                data_alignment = if let Ok(int_value) = value.parse::<NonZeroU32>() {
+                    if int_value.get() % 4 != 0 {
                         return Err("--data-align must be a multiple of 4 bytes".into());
                     }
                     Some(int_value)
