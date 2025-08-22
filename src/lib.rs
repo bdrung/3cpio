@@ -12,8 +12,7 @@ use glob::Pattern;
 use crate::compression::read_magic_header;
 use crate::filetype::*;
 use crate::header::{
-    padding_needed_for, read_filename_from_next_cpio_object, Header, CPIO_ALIGNMENT,
-    CPIO_HEADER_LENGTH,
+    read_filename_from_next_cpio_object, Header, CPIO_ALIGNMENT, TRAILER_FILENAME,
 };
 use crate::libc::strftime_local;
 use crate::manifest::Manifest;
@@ -37,8 +36,6 @@ pub const LOG_LEVEL_WARNING: u32 = 5;
 pub const LOG_LEVEL_INFO: u32 = 7;
 /// The debug level. Designates lower priority information and for debugging.
 pub const LOG_LEVEL_DEBUG: u32 = 8;
-const TRAILER_FILENAME: &str = "TRAILER!!!";
-const TRAILER_SIZE: u64 = calculate_size(TRAILER_FILENAME, 0);
 
 struct CpioFilenameReader<'a, R: Read + SeekForward> {
     archive: &'a mut R,
@@ -395,14 +392,6 @@ pub fn list_cpio_content<W: Write>(
         }
     }
     Ok(())
-}
-
-/// Calculate the size of the header and file data plus the 4-byte padding
-const fn calculate_size(filename: &str, filesize: u64) -> u64 {
-    let filename_len = filename.len() as u64 + 1;
-    let mut size = CPIO_HEADER_LENGTH as u64 + filename_len;
-    size += padding_needed_for(size, CPIO_ALIGNMENT);
-    size + filesize + padding_needed_for(filesize, CPIO_ALIGNMENT)
 }
 
 #[cfg(test)]

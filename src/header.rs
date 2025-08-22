@@ -8,12 +8,14 @@ use std::os::unix::fs::PermissionsExt;
 
 use crate::filetype::*;
 use crate::seek_forward::SeekForward;
-use crate::{SeenFiles, TRAILER_FILENAME};
+use crate::SeenFiles;
 
 pub(crate) const CPIO_ALIGNMENT: u64 = 4;
 pub(crate) const CPIO_HEADER_LENGTH: u32 = 110;
 const CPIO_MAGIC_NUMBER: [u8; 6] = *b"070701";
 const PATH_MAX: usize = 4096;
+pub(crate) const TRAILER_FILENAME: &str = "TRAILER!!!";
+pub(crate) const TRAILER_SIZE: u64 = calculate_size(TRAILER_FILENAME, 0);
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Header {
@@ -262,6 +264,14 @@ impl Header {
         file.write_all(&padding)?;
         Ok(padding_len)
     }
+}
+
+/// Calculate the size of the header and file data plus the 4-byte padding
+pub(crate) const fn calculate_size(filename: &str, filesize: u64) -> u64 {
+    let filename_len = filename.len() as u64 + 1;
+    let mut size = CPIO_HEADER_LENGTH as u64 + filename_len;
+    size += padding_needed_for(size, CPIO_ALIGNMENT);
+    size + filesize + padding_needed_for(filesize, CPIO_ALIGNMENT)
 }
 
 fn check_begins_with_cpio_magic_header(header: &[u8]) -> std::io::Result<()> {
