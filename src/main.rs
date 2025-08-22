@@ -3,7 +3,7 @@
 
 use std::env::set_current_dir;
 use std::fs::{create_dir, read_dir, File};
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Write};
 use std::num::NonZeroU32;
 use std::path::Path;
 use std::process::ExitCode;
@@ -14,7 +14,7 @@ use lexopt::prelude::*;
 use threecpio::extract::{extract_cpio_archive, ExtractOptions};
 use threecpio::ranges::Ranges;
 use threecpio::{
-    create_cpio_archive, examine_cpio_content, list_cpio_content, print_cpio_archive_count,
+    create_cpio_archive, examine_cpio_content, get_cpio_archive_count, list_cpio_content,
     LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING,
 };
 
@@ -266,6 +266,13 @@ fn create_and_set_current_dir(path: &str, force: bool) -> Result<(), String> {
             Ok(true) => {}
         }
     }
+    Ok(())
+}
+
+/// Print the number of concatenated cpio archives.
+fn print_cpio_archive_count<W: Write>(mut archive: File, out: &mut W) -> std::io::Result<()> {
+    let count = get_cpio_archive_count(&mut archive)?;
+    writeln!(out, "{count}")?;
     Ok(())
 }
 

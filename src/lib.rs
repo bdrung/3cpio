@@ -281,17 +281,6 @@ fn get_source_date_epoch() -> Option<u32> {
     }
 }
 
-/// Print the number of concatenated cpio archives.
-///
-/// **Warning**: This function was designed for the `3cpio` command-line application.
-/// The API can change between releases and no stability promises are given.
-/// Please get in contact to support your use case and make the API for this function stable.
-pub fn print_cpio_archive_count<W: Write>(mut archive: File, out: &mut W) -> Result<()> {
-    let count = get_cpio_archive_count(&mut archive)?;
-    writeln!(out, "{count}")?;
-    Ok(())
-}
-
 /// Create a cpio archive and return the size in bytes of the uncompressed data.
 ///
 /// **Warning**: This function was designed for the `3cpio` command-line application.
@@ -428,7 +417,6 @@ const fn padding_needed_for(offset: u64, alignment: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use std::env;
-    use std::io::SeekFrom;
     use std::path::{Path, PathBuf};
 
     use super::*;
@@ -462,6 +450,13 @@ mod tests {
             self.group_cache.insert(123, Some("whoopsie".into()));
             self.group_cache.insert(2000, None);
         }
+    }
+
+    #[test]
+    fn test_print_cpio_archive_count_compressed() {
+        let mut archive = File::open(tests_path("zstd.cpio")).expect("test cpio should be present");
+        let count = get_cpio_archive_count(&mut archive).unwrap();
+        assert_eq!(count, 2);
     }
 
     #[test]
@@ -506,19 +501,6 @@ mod tests {
         let mut output = Vec::new();
         list_cpio_content(archive, &mut output, None, &patterns, LOG_LEVEL_WARNING).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "path/file\n");
-    }
-
-    #[test]
-    fn test_print_cpio_archive_count() {
-        let mut archive = File::open(tests_path("zstd.cpio")).expect("test cpio should be present");
-        let mut output = Vec::new();
-
-        let count = get_cpio_archive_count(&mut archive).unwrap();
-        assert_eq!(count, 2);
-
-        archive.seek(SeekFrom::Start(0)).unwrap();
-        print_cpio_archive_count(archive, &mut output).unwrap();
-        assert_eq!(String::from_utf8(output).unwrap(), "2\n");
     }
 
     #[test]
