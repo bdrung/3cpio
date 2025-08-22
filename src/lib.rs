@@ -110,9 +110,6 @@ fn format_time(timestamp: u32, now: i64) -> Result<String> {
     }
 }
 
-// TODO: Document hardlink structure
-type SeenFiles = HashMap<u128, String>;
-
 fn read_cpio_and_print_filenames<R: Read + SeekForward, W: Write>(
     archive: &mut R,
     out: &mut W,

@@ -1,7 +1,7 @@
 // Copyright (C) 2024-2025, Benjamin Drung <bdrung@posteo.de>
 // SPDX-License-Identifier: ISC
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{
     create_dir, create_dir_all, hard_link, remove_file, set_permissions, symlink_metadata, File,
     OpenOptions,
@@ -20,9 +20,11 @@ use crate::libc::{mknod, set_modified};
 use crate::ranges::Ranges;
 use crate::seek_forward::SeekForward;
 use crate::{
-    filename_matches, seek_to_cpio_end, SeenFiles, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO,
-    TRAILER_FILENAME,
+    filename_matches, seek_to_cpio_end, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, TRAILER_FILENAME,
 };
+
+// TODO: Document hardlink structure
+pub(crate) type SeenFiles = HashMap<u128, String>;
 
 /// Options for extracting cpio archives.
 ///

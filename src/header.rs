@@ -6,9 +6,9 @@ use std::io::{Error, ErrorKind, Read, Result, Write};
 use std::num::NonZeroU32;
 use std::os::unix::fs::PermissionsExt;
 
+use crate::extract::SeenFiles;
 use crate::filetype::*;
 use crate::seek_forward::SeekForward;
-use crate::SeenFiles;
 
 pub(crate) const CPIO_ALIGNMENT: u64 = 4;
 pub(crate) const CPIO_HEADER_LENGTH: u32 = 110;
