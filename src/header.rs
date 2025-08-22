@@ -8,8 +8,10 @@ use std::os::unix::fs::PermissionsExt;
 
 use crate::filetype::*;
 use crate::seek_forward::SeekForward;
-use crate::{padding_needed_for, SeenFiles, CPIO_ALIGNMENT, CPIO_HEADER_LENGTH, TRAILER_FILENAME};
+use crate::{padding_needed_for, SeenFiles, TRAILER_FILENAME};
 
+pub(crate) const CPIO_ALIGNMENT: u64 = 4;
+pub(crate) const CPIO_HEADER_LENGTH: u32 = 110;
 const CPIO_MAGIC_NUMBER: [u8; 6] = *b"070701";
 const PATH_MAX: usize = 4096;
 

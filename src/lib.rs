@@ -11,7 +11,9 @@ use glob::Pattern;
 
 use crate::compression::read_magic_header;
 use crate::filetype::*;
-use crate::header::{read_filename_from_next_cpio_object, Header};
+use crate::header::{
+    read_filename_from_next_cpio_object, Header, CPIO_ALIGNMENT, CPIO_HEADER_LENGTH,
+};
 use crate::libc::strftime_local;
 use crate::manifest::Manifest;
 use crate::ranges::Ranges;
@@ -28,8 +30,6 @@ pub mod ranges;
 mod seek_forward;
 pub mod temp_dir;
 
-const CPIO_ALIGNMENT: u64 = 4;
-const CPIO_HEADER_LENGTH: u32 = 110;
 /// The warning level. Designates hazardous situations.
 pub const LOG_LEVEL_WARNING: u32 = 5;
 /// The info level. Designates useful information.
