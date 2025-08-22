@@ -12,10 +12,10 @@ use glob::Pattern;
 use lexopt::prelude::*;
 
 use threecpio::extract::{extract_cpio_archive, ExtractOptions};
+use threecpio::logger::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING};
 use threecpio::ranges::Ranges;
 use threecpio::{
     create_cpio_archive, examine_cpio_content, get_cpio_archive_count, list_cpio_content,
-    LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING,
 };
 
 #[derive(Debug)]

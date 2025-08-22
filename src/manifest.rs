@@ -771,9 +771,9 @@ mod tests {
     use std::path::Path;
 
     use super::*;
+    use crate::logger::LOG_LEVEL_WARNING;
     use crate::temp_dir::TempDir;
     use crate::tests::TEST_LOCK;
-    use crate::LOG_LEVEL_WARNING;
 
     fn create_text_file_in_tmpdir<P: AsRef<Path>>(
         tempdir: &TempDir,

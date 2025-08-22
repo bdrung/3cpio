@@ -17,11 +17,10 @@ use crate::compression::read_magic_header;
 use crate::filetype::*;
 use crate::header::Header;
 use crate::libc::{mknod, set_modified};
+use crate::logger::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
 use crate::ranges::Ranges;
 use crate::seek_forward::SeekForward;
-use crate::{
-    filename_matches, seek_to_cpio_end, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, TRAILER_FILENAME,
-};
+use crate::{filename_matches, seek_to_cpio_end, TRAILER_FILENAME};
 
 // TODO: Document hardlink structure
 pub(crate) type SeenFiles = HashMap<u128, String>;
@@ -521,9 +520,9 @@ mod tests {
 
     use super::*;
     use crate::libc::{major, minor};
+    use crate::logger::LOG_LEVEL_WARNING;
     use crate::temp_dir::TempDir;
     use crate::tests::{tests_path, TEST_LOCK};
-    use crate::LOG_LEVEL_WARNING;
 
     fn getgid() -> u32 {
         unsafe { ::libc::getgid() }

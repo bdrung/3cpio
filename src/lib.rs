@@ -15,6 +15,7 @@ use crate::header::{
     read_filename_from_next_cpio_object, Header, CPIO_ALIGNMENT, TRAILER_FILENAME,
 };
 use crate::libc::strftime_local;
+use crate::logger::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
 use crate::manifest::Manifest;
 use crate::ranges::Ranges;
 use crate::seek_forward::SeekForward;
@@ -25,17 +26,11 @@ pub mod extract;
 mod filetype;
 mod header;
 mod libc;
+pub mod logger;
 mod manifest;
 pub mod ranges;
 mod seek_forward;
 pub mod temp_dir;
-
-/// The warning level. Designates hazardous situations.
-pub const LOG_LEVEL_WARNING: u32 = 5;
-/// The info level. Designates useful information.
-pub const LOG_LEVEL_INFO: u32 = 7;
-/// The debug level. Designates lower priority information and for debugging.
-pub const LOG_LEVEL_DEBUG: u32 = 8;
 
 struct CpioFilenameReader<'a, R: Read + SeekForward> {
     archive: &'a mut R,
@@ -397,6 +392,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use super::*;
+    use crate::logger::LOG_LEVEL_WARNING;
 
     // Lock for tests that rely on / change the current directory
     pub(crate) static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
