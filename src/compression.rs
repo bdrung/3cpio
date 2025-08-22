@@ -6,7 +6,7 @@ use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 use std::process::{Child, ChildStdout, Command, Stdio};
 
 #[derive(Debug, PartialEq)]
-pub enum Compression {
+pub(crate) enum Compression {
     Uncompressed,
     Bzip2 {
         level: Option<u32>,
@@ -36,7 +36,7 @@ pub enum Compression {
 }
 
 impl Compression {
-    pub fn from_magic_number(magic_number: [u8; 4]) -> Result<Self> {
+    pub(crate) fn from_magic_number(magic_number: [u8; 4]) -> Result<Self> {
         let compression = match magic_number {
             [0x42, 0x5A, 0x68, _] => Compression::Bzip2 { level: None },
             [0x30, 0x37, 0x30, 0x37] => Compression::Uncompressed,
@@ -104,7 +104,7 @@ impl Compression {
         };
     }
 
-    pub fn from_command_line(line: &str) -> Result<Self> {
+    pub(crate) fn from_command_line(line: &str) -> Result<Self> {
         let mut iter = line.split_whitespace();
         let mut compression = if let Some(cmd) = iter.next() {
             Self::from_str(cmd)?
@@ -155,7 +155,7 @@ impl Compression {
         Ok(compression)
     }
 
-    pub fn command(&self) -> &str {
+    pub(crate) fn command(&self) -> &str {
         match self {
             Self::Uncompressed => "cpio",
             Self::Bzip2 { level: _ } => "bzip2",
@@ -172,7 +172,7 @@ impl Compression {
         }
     }
 
-    pub fn compress(
+    pub(crate) fn compress(
         &self,
         file: Option<File>,
         source_date_epoch: Option<u32>,
@@ -261,7 +261,7 @@ impl Compression {
         command
     }
 
-    pub fn decompress(&self, file: File) -> Result<ChildStdout> {
+    pub(crate) fn decompress(&self, file: File) -> Result<ChildStdout> {
         let mut command = self.decompress_command();
         // TODO: Propper error message if spawn fails
         let cmd = command
@@ -300,12 +300,12 @@ impl Compression {
         command
     }
 
-    pub fn is_uncompressed(&self) -> bool {
+    pub(crate) fn is_uncompressed(&self) -> bool {
         matches!(self, Self::Uncompressed)
     }
 }
 
-pub fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Compression>> {
+pub(crate) fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Compression>> {
     let mut buffer = [0; 4];
     while buffer == [0, 0, 0, 0] {
         match file.read_exact(&mut buffer) {

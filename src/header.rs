@@ -14,24 +14,24 @@ const CPIO_MAGIC_NUMBER: [u8; 6] = *b"070701";
 const PATH_MAX: usize = 4096;
 
 #[derive(Debug, PartialEq)]
-pub struct Header {
-    pub ino: u32,
-    pub mode: u32,
-    pub uid: u32,
-    pub gid: u32,
-    pub nlink: u32,
-    pub mtime: u32,
-    pub filesize: u32,
+pub(crate) struct Header {
+    pub(crate) ino: u32,
+    pub(crate) mode: u32,
+    pub(crate) uid: u32,
+    pub(crate) gid: u32,
+    pub(crate) nlink: u32,
+    pub(crate) mtime: u32,
+    pub(crate) filesize: u32,
     major: u32,
     minor: u32,
-    pub rmajor: u32,
-    pub rminor: u32,
-    pub filename: String,
+    pub(crate) rmajor: u32,
+    pub(crate) rminor: u32,
+    pub(crate) filename: String,
 }
 
 impl Header {
     #![allow(clippy::too_many_arguments)]
-    pub fn new<S>(
+    pub(crate) fn new<S>(
         ino: u32,
         mode: u32,
         uid: u32,
@@ -62,7 +62,7 @@ impl Header {
         }
     }
 
-    pub fn trailer() -> Self {
+    pub(crate) fn trailer() -> Self {
         Self {
             ino: 0,
             mode: 0,
@@ -84,16 +84,16 @@ impl Header {
         (u64::from(self.major) << 32) | u64::from(self.minor)
     }
 
-    pub fn is_root_directory(&self) -> bool {
+    pub(crate) fn is_root_directory(&self) -> bool {
         self.filename == "." && self.mode & MODE_FILETYPE_MASK == FILETYPE_DIRECTORY
     }
 
-    pub fn mode_perm(&self) -> u32 {
+    pub(crate) fn mode_perm(&self) -> u32 {
         self.mode & MODE_PERMISSION_MASK
     }
 
     // ls-style ASCII representation of the mode
-    pub fn mode_string(&self) -> [u8; 10] {
+    pub(crate) fn mode_string(&self) -> [u8; 10] {
         [
             match self.mode & MODE_FILETYPE_MASK {
                 FILETYPE_FIFO => b'p',
@@ -136,7 +136,7 @@ impl Header {
         padding_needed_for(self.filesize.into(), CPIO_ALIGNMENT)
     }
 
-    pub fn permission(&self) -> Permissions {
+    pub(crate) fn permission(&self) -> Permissions {
         PermissionsExt::from_mode(self.mode & MODE_PERMISSION_MASK)
     }
 
@@ -144,11 +144,11 @@ impl Header {
         (u128::from(self.ino) << 64) | u128::from(self.dev())
     }
 
-    pub fn mark_seen(&self, seen_files: &mut SeenFiles) {
+    pub(crate) fn mark_seen(&self, seen_files: &mut SeenFiles) {
         seen_files.insert(self.ino_and_dev(), self.filename.clone());
     }
 
-    pub fn read<R: Read>(archive: &mut R) -> Result<Self> {
+    pub(crate) fn read<R: Read>(archive: &mut R) -> Result<Self> {
         let mut buffer = [0; CPIO_HEADER_LENGTH as usize];
         archive.read_exact(&mut buffer)?;
         check_begins_with_cpio_magic_header(&buffer)?;
@@ -170,7 +170,7 @@ impl Header {
         })
     }
 
-    pub fn read_symlink_target<R: Read>(&self, archive: &mut R) -> Result<String> {
+    pub(crate) fn read_symlink_target<R: Read>(&self, archive: &mut R) -> Result<String> {
         let align = usize::try_from(self.padding_needed_for_file_content()).unwrap();
         let filesize = self.filesize.try_into().unwrap();
         let mut target_bytes = vec![0u8; filesize + align];
@@ -181,11 +181,11 @@ impl Header {
         Ok(target.into())
     }
 
-    pub fn skip_file_content<R: SeekForward>(&self, archive: &mut R) -> Result<()> {
+    pub(crate) fn skip_file_content<R: SeekForward>(&self, archive: &mut R) -> Result<()> {
         skip_file_content(archive, self.filesize)
     }
 
-    pub fn skip_file_content_padding<R: SeekForward>(&self, archive: &mut R) -> Result<()> {
+    pub(crate) fn skip_file_content_padding<R: SeekForward>(&self, archive: &mut R) -> Result<()> {
         let skip = self.padding_needed_for_file_content();
         if skip == 0 {
             return Ok(());
@@ -193,18 +193,21 @@ impl Header {
         archive.seek_forward(skip)
     }
 
-    pub fn try_get_hard_link_target<'a>(&self, seen_files: &'a SeenFiles) -> Option<&'a String> {
+    pub(crate) fn try_get_hard_link_target<'a>(
+        &self,
+        seen_files: &'a SeenFiles,
+    ) -> Option<&'a String> {
         if self.nlink <= 1 {
             return None;
         }
         seen_files.get(&self.ino_and_dev())
     }
 
-    pub fn write<W: Write>(&self, file: &mut W) -> Result<u64> {
+    pub(crate) fn write<W: Write>(&self, file: &mut W) -> Result<u64> {
         self.write_with_alignment(file, None, 0)
     }
 
-    pub fn write_with_alignment<W: Write>(
+    pub(crate) fn write_with_alignment<W: Write>(
         &self,
         file: &mut W,
         alignment: Option<NonZeroU32>,
@@ -248,7 +251,7 @@ impl Header {
         Ok(offset + padding_len)
     }
 
-    pub fn write_file_data_padding<W: Write>(&self, file: &mut W) -> Result<u64> {
+    pub(crate) fn write_file_data_padding<W: Write>(&self, file: &mut W) -> Result<u64> {
         let padding_len = self.padding_needed_for_file_content();
         if padding_len == 0 {
             return Ok(0);
@@ -316,7 +319,7 @@ fn read_filename<R: Read>(archive: &mut R, namesize: u64) -> Result<String> {
 ///
 /// Read the next cpio object header, check the magic, skip the file data.
 /// Return the file name.
-pub fn read_filename_from_next_cpio_object<R: Read + SeekForward>(
+pub(crate) fn read_filename_from_next_cpio_object<R: Read + SeekForward>(
     archive: &mut R,
 ) -> Result<String> {
     let mut header = [0; CPIO_HEADER_LENGTH as usize];

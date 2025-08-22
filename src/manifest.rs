@@ -70,14 +70,14 @@ struct File {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Archive {
+pub(crate) struct Archive {
     compression: Compression,
     files: Vec<File>,
     hardlinks: HashMap<u128, Hardlink>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Manifest {
+pub(crate) struct Manifest {
     archives: Vec<Archive>,
     umask: u32,
 }
@@ -638,7 +638,7 @@ impl Manifest {
         Self { archives, umask }
     }
 
-    pub fn from_input<R: BufRead>(reader: R, log_level: u32) -> Result<Self> {
+    pub(crate) fn from_input<R: BufRead>(reader: R, log_level: u32) -> Result<Self> {
         let mut archives = vec![Archive::new()];
         let mut current_archive = archives.last_mut().unwrap();
         let mut umask = 0;
@@ -696,7 +696,7 @@ impl Manifest {
     }
 
     // Return the size in bytes of the uncompressed data.
-    pub fn write_archive(
+    pub(crate) fn write_archive(
         self,
         mut file: Option<std::fs::File>,
         alignment: Option<NonZeroU32>,
@@ -789,7 +789,7 @@ mod tests {
         path.into_os_string().into_string().unwrap()
     }
 
-    pub fn make_temp_dir_with_hardlinks() -> Result<TempDir> {
+    pub(crate) fn make_temp_dir_with_hardlinks() -> Result<TempDir> {
         let temp_dir = TempDir::new()?;
         let path = temp_dir.path.join("a");
         let mut file = std::fs::File::create(&path)?;

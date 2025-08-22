@@ -7,7 +7,7 @@ use std::process::ChildStdout;
 
 const PIPE_SIZE: usize = 65536;
 
-pub trait SeekForward {
+pub(crate) trait SeekForward {
     /// Seek forward to an offset, in bytes, in a stream.
     ///
     /// A seek beyond the end of a stream is allowed, but behavior is defined

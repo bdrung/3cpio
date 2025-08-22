@@ -1,10 +1,13 @@
 // Copyright (C) 2025, Benjamin Drung <bdrung@posteo.de>
 // SPDX-License-Identifier: ISC
 
-use std::env::{self, current_dir, set_current_dir};
+use std::env::{self, set_current_dir};
 use std::fs::File;
 use std::io::{Read, Result, Write};
 use std::path::{Path, PathBuf};
+
+#[cfg(test)]
+use std::env::current_dir;
 
 pub struct TempDir {
     /// Path of the temporary directory.
@@ -50,7 +53,8 @@ impl TempDir {
     ///
     /// The temporary directory name is constructed by using `CARGO_PKG_NAME`
     /// followed by a dot and random alphanumeric characters.
-    pub fn new_and_set_current_dir() -> Result<Self> {
+    #[cfg(test)]
+    pub(crate) fn new_and_set_current_dir() -> Result<Self> {
         let path = create_tempdir()?;
         let cwd = current_dir()?;
         set_current_dir(&path)?;

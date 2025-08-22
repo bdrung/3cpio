@@ -7,7 +7,7 @@ use std::io::{Error, Result};
 /// The getpwuid() function returns a pointer to a structure containing the
 /// broken-out fields of the record in the password database (e.g., the local
 /// password file /etc/passwd, NIS, and LDAP) that matches the user ID uid.
-pub fn getpwuid_name(uid: u32) -> Result<Option<String>> {
+pub(crate) fn getpwuid_name(uid: u32) -> Result<Option<String>> {
     let mut pwd = std::mem::MaybeUninit::<libc::passwd>::uninit();
     let mut buf = [0u8; 2048];
     let mut result = std::ptr::null_mut::<libc::passwd>();
@@ -36,7 +36,7 @@ pub fn getpwuid_name(uid: u32) -> Result<Option<String>> {
 /// The getgrgid() function returns a pointer to a structure containing the
 /// broken-out fields of the record in the group database (e.g., the local
 /// group file /etc/group, NIS, and LDAP) that matches the group ID gid.
-pub fn getgrgid_name(gid: u32) -> Result<Option<String>> {
+pub(crate) fn getgrgid_name(gid: u32) -> Result<Option<String>> {
     let mut group = std::mem::MaybeUninit::<libc::group>::uninit();
     let mut buf = [0u8; 2048];
     let mut result = std::ptr::null_mut::<libc::group>();
@@ -59,15 +59,15 @@ pub fn getgrgid_name(gid: u32) -> Result<Option<String>> {
     Ok(Some(name.to_string_lossy().to_string()))
 }
 
-pub fn major(dev: u64) -> u32 {
+pub(crate) fn major(dev: u64) -> u32 {
     libc::major(dev)
 }
 
-pub fn minor(dev: u64) -> u32 {
+pub(crate) fn minor(dev: u64) -> u32 {
     libc::minor(dev)
 }
 
-pub fn mknod(pathname: &str, mode: libc::mode_t, major: u32, minor: u32) -> Result<()> {
+pub(crate) fn mknod(pathname: &str, mode: libc::mode_t, major: u32, minor: u32) -> Result<()> {
     let p = CString::new(pathname)?;
     let rc = unsafe { libc::mknod(p.as_ptr(), mode, libc::makedev(major, minor)) };
     if rc != 0 {
@@ -76,7 +76,7 @@ pub fn mknod(pathname: &str, mode: libc::mode_t, major: u32, minor: u32) -> Resu
     Ok(())
 }
 
-pub fn set_modified(path: &str, mtime: i64) -> Result<()> {
+pub(crate) fn set_modified(path: &str, mtime: i64) -> Result<()> {
     let p = CString::new(path)?;
     let mut modified: libc::timespec = unsafe { std::mem::zeroed() };
     modified.tv_sec = mtime;
@@ -113,7 +113,7 @@ fn strftime(format: &[u8], tm: *mut libc::tm) -> Result<String> {
     Ok(String::from_utf8_lossy(&s[..length]).to_string())
 }
 
-pub fn strftime_local(format: &[u8], timestamp: u32) -> Result<String> {
+pub(crate) fn strftime_local(format: &[u8], timestamp: u32) -> Result<String> {
     let mut tm = std::mem::MaybeUninit::<libc::tm>::uninit();
     let result = unsafe { libc::localtime_r(&timestamp.into(), tm.as_mut_ptr()) };
     if result.is_null() {
@@ -123,7 +123,7 @@ pub fn strftime_local(format: &[u8], timestamp: u32) -> Result<String> {
 }
 
 #[cfg(test)]
-pub mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::temp_dir::TempDir;
     use std::time::{Duration, SystemTime};

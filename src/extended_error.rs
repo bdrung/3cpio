@@ -3,7 +3,7 @@
 
 use std::io::Error;
 
-pub trait ExtendedError {
+pub(crate) trait ExtendedError {
     fn add_prefix<S: AsRef<str>>(self, filename: S) -> Self;
     fn add_line(self, line_number: usize) -> Self;
 }

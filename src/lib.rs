@@ -422,7 +422,7 @@ mod tests {
     use super::*;
 
     // Lock for tests that rely on / change the current directory
-    pub static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
+    pub(crate) static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
 
     #[test]
     fn test_padding_needed_for() {
@@ -434,7 +434,7 @@ mod tests {
         assert_eq!(padding_needed_for(32, 4), 0);
     }
 
-    pub fn tests_path<P: AsRef<Path>>(path: P) -> PathBuf {
+    pub(crate) fn tests_path<P: AsRef<Path>>(path: P) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
             .join(path)

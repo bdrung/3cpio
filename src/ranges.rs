@@ -171,7 +171,7 @@ impl FromStr for Ranges {
 }
 
 #[cfg(test)]
-pub mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
