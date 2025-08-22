@@ -24,6 +24,11 @@ use crate::{
     TRAILER_FILENAME,
 };
 
+/// Options for extracting cpio archives.
+///
+/// **Warning**: This struct was designed for the `extract_cpio_archive` function.
+/// The API can change between releases and no stability promises are given.
+/// Please get in contact to support your use case and make the API for this function stable.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExtractOptions {
     make_directories: bool,
@@ -34,6 +39,11 @@ pub struct ExtractOptions {
 }
 
 impl ExtractOptions {
+    /// Create a new extract options structure.
+    ///
+    /// **Warning**: This function was designed for the `3cpio` command-line application.
+    /// The API can change between releases and no stability promises are given.
+    /// Please get in contact to support your use case and make the API for this function stable.
     pub fn new(
         make_directories: bool,
         parts: Option<Ranges>,
@@ -132,6 +142,11 @@ fn create_dir_ignore_existing<P: AsRef<std::path::Path>>(path: P) -> Result<()> 
     Ok(())
 }
 
+/// Extract cpio archives.
+///
+/// **Warning**: This function was designed for the `3cpio` command-line application.
+/// The API can change between releases and no stability promises are given.
+/// Please get in contact to support your use case and make the API for this function stable.
 pub fn extract_cpio_archive<W: Write>(
     mut archive: File,
     mut out: Option<&mut W>,

@@ -30,8 +30,11 @@ pub mod temp_dir;
 
 const CPIO_ALIGNMENT: u64 = 4;
 const CPIO_HEADER_LENGTH: u32 = 110;
+/// The warning level. Designates hazardous situations.
 pub const LOG_LEVEL_WARNING: u32 = 5;
+/// The info level. Designates useful information.
 pub const LOG_LEVEL_INFO: u32 = 7;
+/// The debug level. Designates lower priority information and for debugging.
 pub const LOG_LEVEL_DEBUG: u32 = 8;
 const TRAILER_FILENAME: &str = "TRAILER!!!";
 const TRAILER_SIZE: u64 = calculate_size(TRAILER_FILENAME, 0);
@@ -241,6 +244,7 @@ fn seek_to_cpio_end(archive: &mut File) -> Result<()> {
     Ok(())
 }
 
+/// Return the number of concatenated cpio archives.
 pub fn get_cpio_archive_count(archive: &mut File) -> Result<u32> {
     let mut count = 0;
     loop {
@@ -277,13 +281,22 @@ fn get_source_date_epoch() -> Option<u32> {
     }
 }
 
+/// Print the number of concatenated cpio archives.
+///
+/// **Warning**: This function was designed for the `3cpio` command-line application.
+/// The API can change between releases and no stability promises are given.
+/// Please get in contact to support your use case and make the API for this function stable.
 pub fn print_cpio_archive_count<W: Write>(mut archive: File, out: &mut W) -> Result<()> {
     let count = get_cpio_archive_count(&mut archive)?;
     writeln!(out, "{count}")?;
     Ok(())
 }
 
-// Return the size in bytes of the uncompressed data.
+/// Create a cpio archive and return the size in bytes of the uncompressed data.
+///
+/// **Warning**: This function was designed for the `3cpio` command-line application.
+/// The API can change between releases and no stability promises are given.
+/// Please get in contact to support your use case and make the API for this function stable.
 pub fn create_cpio_archive(
     archive: Option<File>,
     alignment: Option<NonZeroU32>,
@@ -302,6 +315,11 @@ pub fn create_cpio_archive(
     manifest.write_archive(archive, alignment, source_date_epoch, log_level)
 }
 
+/// List the offsets of the cpio archives and their compression.
+///
+/// **Warning**: This function was designed for the `3cpio` command-line application.
+/// The API can change between releases and no stability promises are given.
+/// Please get in contact to support your use case and make the API for this function stable.
 pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<()> {
     loop {
         let compression = match read_magic_header(&mut archive) {
@@ -323,6 +341,11 @@ pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<
     Ok(())
 }
 
+/// List the contents of the cpio archives.
+///
+/// **Warning**: This function was designed for the `3cpio` command-line application.
+/// The API can change between releases and no stability promises are given.
+/// Please get in contact to support your use case and make the API for this function stable.
 pub fn list_cpio_content<W: Write>(
     mut archive: File,
     out: &mut W,
