@@ -12,7 +12,8 @@ use glob::Pattern;
 use crate::compression::read_magic_header;
 use crate::filetype::*;
 use crate::header::{
-    read_filename_from_next_cpio_object, Header, CPIO_ALIGNMENT, CPIO_HEADER_LENGTH,
+    padding_needed_for, read_filename_from_next_cpio_object, Header, CPIO_ALIGNMENT,
+    CPIO_HEADER_LENGTH,
 };
 use crate::libc::strftime_local;
 use crate::manifest::Manifest;
@@ -404,16 +405,6 @@ const fn calculate_size(filename: &str, filesize: u64) -> u64 {
     size + filesize + padding_needed_for(filesize, CPIO_ALIGNMENT)
 }
 
-/// Returns the amount of padding needed after `offset` to ensure that the
-/// following address will be aligned to `alignment`.
-const fn padding_needed_for(offset: u64, alignment: u64) -> u64 {
-    let misalignment = offset % alignment;
-    if misalignment == 0 {
-        return 0;
-    }
-    alignment - misalignment
-}
-
 #[cfg(test)]
 mod tests {
     use std::env;
@@ -423,16 +414,6 @@ mod tests {
 
     // Lock for tests that rely on / change the current directory
     pub(crate) static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
-
-    #[test]
-    fn test_padding_needed_for() {
-        assert_eq!(padding_needed_for(110, 4), 2);
-    }
-
-    #[test]
-    fn test_padding_needed_for_is_aligned() {
-        assert_eq!(padding_needed_for(32, 4), 0);
-    }
 
     pub(crate) fn tests_path<P: AsRef<Path>>(path: P) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))

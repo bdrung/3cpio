@@ -10,12 +10,9 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use crate::compression::Compression;
 use crate::extended_error::ExtendedError;
 use crate::filetype::*;
-use crate::header::Header;
+use crate::header::{padding_needed_for, Header};
 use crate::libc::{major, minor};
-use crate::{
-    calculate_size, padding_needed_for, CPIO_ALIGNMENT, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO,
-    TRAILER_SIZE,
-};
+use crate::{calculate_size, CPIO_ALIGNMENT, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, TRAILER_SIZE};
 
 #[derive(Debug, PartialEq)]
 struct Hardlink {
