@@ -17,7 +17,7 @@ use crate::compression::read_magic_header;
 use crate::filetype::*;
 use crate::header::Header;
 use crate::libc::{mknod, set_modified};
-use crate::logger::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
+use crate::logger::Logger;
 use crate::ranges::Ranges;
 use crate::seek_forward::SeekForward;
 use crate::{filename_matches, seek_to_cpio_end, TRAILER_FILENAME};
@@ -81,11 +81,9 @@ impl Extractor {
         }
     }
 
-    fn set_modified_times(&self, log_level: u32) -> Result<()> {
+    fn set_modified_times<W: Write>(&self, logger: &mut Logger<W>) -> Result<()> {
         for (path, mtime) in self.mtimes.iter().rev() {
-            if log_level >= LOG_LEVEL_DEBUG {
-                writeln!(std::io::stderr(), "set mtime {mtime} for '{path}'")?;
-            };
+            debug!(logger, "set mtime {mtime} for '{path}'")?;
             set_modified(path, *mtime)?;
         }
         Ok(())
@@ -148,11 +146,11 @@ fn create_dir_ignore_existing<P: AsRef<std::path::Path>>(path: P) -> Result<()> 
 /// **Warning**: This function was designed for the `3cpio` command-line application.
 /// The API can change between releases and no stability promises are given.
 /// Please get in contact to support your use case and make the API for this function stable.
-pub fn extract_cpio_archive<W: Write>(
+pub fn extract_cpio_archive<W: Write, LW: Write>(
     mut archive: File,
     mut out: Option<&mut W>,
     options: &ExtractOptions,
-    log_level: u32,
+    logger: &mut Logger<LW>,
 ) -> Result<()> {
     let mut count = 0;
     let base_dir = std::env::current_dir()?;
@@ -176,10 +174,10 @@ pub fn extract_cpio_archive<W: Write>(
             std::env::set_current_dir(&dir)?;
         }
         if compression.is_uncompressed() {
-            read_cpio_and_extract(&mut archive, &dir, &mut out, options, log_level)?;
+            read_cpio_and_extract(&mut archive, &dir, &mut out, options, logger)?;
         } else {
             let mut decompressed = compression.decompress(archive)?;
-            read_cpio_and_extract(&mut decompressed, &dir, &mut out, options, log_level)?;
+            read_cpio_and_extract(&mut decompressed, &dir, &mut out, options, logger)?;
             break;
         }
     }
@@ -190,12 +188,12 @@ fn from_mtime(mtime: u32) -> SystemTime {
     std::time::UNIX_EPOCH + std::time::Duration::from_secs(mtime.into())
 }
 
-fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
+fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
     archive: &mut R,
     base_dir: &PathBuf,
     out: &mut Option<W>,
     options: &ExtractOptions,
-    log_level: u32,
+    logger: &mut Logger<LW>,
 ) -> Result<()> {
     let mut extractor = Extractor::new();
     let mut previous_checked_dir = PathBuf::new();
@@ -211,18 +209,14 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
             Err(e) => return Err(e),
         };
 
-        if log_level >= LOG_LEVEL_DEBUG {
-            writeln!(std::io::stderr(), "{header:?}")?;
-        }
+        debug!(logger, "{header:?}")?;
 
         if !options.patterns.is_empty() && !filename_matches(&header.filename, &options.patterns) {
             header.skip_file_content(archive)?;
             continue;
         }
 
-        if log_level >= LOG_LEVEL_INFO {
-            writeln!(std::io::stderr(), "{}", header.filename)?;
-        }
+        info!(logger, "{}", header.filename)?;
 
         if out.is_none() && !header.is_root_directory() {
             // TODO: use dirfd once stable: https://github.com/rust-lang/rust/issues/120426
@@ -270,12 +264,12 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
         } else {
             match header.mode & MODE_FILETYPE_MASK {
                 FILETYPE_CHARACTER_DEVICE => {
-                    write_character_device(&header, options.preserve_permissions, log_level)?
+                    write_character_device(&header, options.preserve_permissions, logger)?
                 }
                 FILETYPE_DIRECTORY => write_directory(
                     &header,
                     options.preserve_permissions,
-                    log_level,
+                    logger,
                     &mut extractor.mtimes,
                 )?,
                 FILETYPE_REGULAR_FILE => write_file(
@@ -283,10 +277,10 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
                     &header,
                     options.preserve_permissions,
                     &mut extractor.seen_files,
-                    log_level,
+                    logger,
                 )?,
                 FILETYPE_SYMLINK => {
-                    write_symbolic_link(archive, &header, options.preserve_permissions, log_level)?
+                    write_symbolic_link(archive, &header, options.preserve_permissions, logger)?
                 }
                 FILETYPE_FIFO | FILETYPE_BLOCK_DEVICE | FILETYPE_SOCKET => {
                     unimplemented!(
@@ -306,14 +300,14 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write>(
             }
         };
     }
-    extractor.set_modified_times(log_level)?;
+    extractor.set_modified_times(logger)?;
     Ok(())
 }
 
-fn write_character_device(
+fn write_character_device<W: Write>(
     header: &Header,
     preserve_permissions: bool,
-    log_level: u32,
+    logger: &mut Logger<W>,
 ) -> Result<()> {
     if header.filesize != 0 {
         return Err(Error::new(
@@ -324,14 +318,12 @@ fn write_character_device(
             ),
         ));
     };
-    if log_level >= LOG_LEVEL_DEBUG {
-        writeln!(
-            std::io::stderr(),
-            "Creating character device '{}' with mode {:o}",
-            header.filename,
-            header.mode_perm(),
-        )?;
-    };
+    debug!(
+        logger,
+        "Creating character device '{}' with mode {:o}",
+        header.filename,
+        header.mode_perm(),
+    )?;
     if let Err(e) = mknod(&header.filename, header.mode, header.rmajor, header.rminor) {
         match e.kind() {
             ErrorKind::AlreadyExists => {
@@ -351,10 +343,10 @@ fn write_character_device(
     Ok(())
 }
 
-fn write_directory(
+fn write_directory<W: Write>(
     header: &Header,
     preserve_permissions: bool,
-    log_level: u32,
+    logger: &mut Logger<W>,
     mtimes: &mut BTreeMap<String, i64>,
 ) -> Result<()> {
     if header.filesize != 0 {
@@ -366,19 +358,17 @@ fn write_directory(
             ),
         ));
     };
-    if log_level >= LOG_LEVEL_DEBUG {
-        writeln!(
-            std::io::stderr(),
-            "Creating directory '{}' with mode {:o}{}",
-            header.filename,
-            header.mode_perm(),
-            if preserve_permissions {
-                format!(" and owner {}:{}", header.uid, header.gid)
-            } else {
-                String::new()
-            },
-        )?;
-    };
+    debug!(
+        logger,
+        "Creating directory '{}' with mode {:o}{}",
+        header.filename,
+        header.mode_perm(),
+        if preserve_permissions {
+            format!(" and owner {}:{}", header.uid, header.gid)
+        } else {
+            String::new()
+        },
+    )?;
     create_dir_ignore_existing(&header.filename)?;
     if preserve_permissions {
         chown(&header.filename, Some(header.uid), Some(header.gid))?;
@@ -388,30 +378,28 @@ fn write_directory(
     Ok(())
 }
 
-fn write_file<R: Read + SeekForward>(
+fn write_file<R: Read + SeekForward, W: Write>(
     archive: &mut R,
     header: &Header,
     preserve_permissions: bool,
     seen_files: &mut SeenFiles,
-    log_level: u32,
+    logger: &mut Logger<W>,
 ) -> Result<()> {
     let mut file;
     if let Some(target) = header.try_get_hard_link_target(seen_files) {
-        if log_level >= LOG_LEVEL_DEBUG {
-            writeln!(
-                std::io::stderr(),
-                "Creating hard-link '{}' -> '{}' with permission {:o}{} and {} bytes",
-                header.filename,
-                target,
-                header.mode_perm(),
-                if preserve_permissions {
-                    format!(" and owner {}:{}", header.uid, header.gid)
-                } else {
-                    String::new()
-                },
-                header.filesize,
-            )?;
-        };
+        debug!(
+            logger,
+            "Creating hard-link '{}' -> '{}' with permission {:o}{} and {} bytes",
+            header.filename,
+            target,
+            header.mode_perm(),
+            if preserve_permissions {
+                format!(" and owner {}:{}", header.uid, header.gid)
+            } else {
+                String::new()
+            },
+            header.filesize,
+        )?;
         if let Err(e) = hard_link(target, &header.filename) {
             match e.kind() {
                 ErrorKind::AlreadyExists => {
@@ -425,20 +413,18 @@ fn write_file<R: Read + SeekForward>(
         }
         file = OpenOptions::new().write(true).open(&header.filename)?
     } else {
-        if log_level >= LOG_LEVEL_DEBUG {
-            writeln!(
-                std::io::stderr(),
-                "Creating file '{}' with permission {:o}{} and {} bytes",
-                header.filename,
-                header.mode_perm(),
-                if preserve_permissions {
-                    format!(" and owner {}:{}", header.uid, header.gid)
-                } else {
-                    String::new()
-                },
-                header.filesize,
-            )?;
-        };
+        debug!(
+            logger,
+            "Creating file '{}' with permission {:o}{} and {} bytes",
+            header.filename,
+            header.mode_perm(),
+            if preserve_permissions {
+                format!(" and owner {}:{}", header.uid, header.gid)
+            } else {
+                String::new()
+            },
+            header.filesize,
+        )?;
         file = File::create(&header.filename)?
     };
     header.mark_seen(seen_files);
@@ -469,22 +455,20 @@ fn write_file_content<R: Read + SeekForward, W: Write>(
     header.skip_file_content_padding(archive)
 }
 
-fn write_symbolic_link<R: Read + SeekForward>(
+fn write_symbolic_link<R: Read + SeekForward, W: Write>(
     archive: &mut R,
     header: &Header,
     preserve_permissions: bool,
-    log_level: u32,
+    logger: &mut Logger<W>,
 ) -> Result<()> {
     let target = header.read_symlink_target(archive)?;
-    if log_level >= LOG_LEVEL_DEBUG {
-        writeln!(
-            std::io::stderr(),
-            "Creating symlink '{}' -> '{}' with mode {:o}",
-            header.filename,
-            &target,
-            header.mode_perm(),
-        )?;
-    };
+    debug!(
+        logger,
+        "Creating symlink '{}' -> '{}' with mode {:o}",
+        header.filename,
+        &target,
+        header.mode_perm(),
+    )?;
     if let Err(e) = symlink(&target, &header.filename) {
         match e.kind() {
             ErrorKind::AlreadyExists => {
@@ -563,11 +547,13 @@ mod tests {
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("p?th/f*").unwrap()];
         let options = ExtractOptions::new(true, None, patterns, false, None);
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
 
-        extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
+        extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(tempdir.path.join("path/file").exists());
         assert!(!tempdir.path.join("usr").exists());
+        assert_eq!(logger.get_logs(), "");
     }
 
     #[test]
@@ -581,8 +567,10 @@ mod tests {
             false,
             None,
         );
-        extract_cpio_archive(archive, Some(&mut output), &options, LOG_LEVEL_WARNING).unwrap();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "content\n");
+        assert_eq!(logger.get_logs(), "");
     }
 
     #[test]
@@ -590,11 +578,13 @@ mod tests {
         let archive = File::open(tests_path("bzip2.cpio")).unwrap();
         let mut output = Vec::new();
         let options = ExtractOptions::default();
-        extract_cpio_archive(archive, Some(&mut output), &options, LOG_LEVEL_WARNING).unwrap();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             "content\nThis is a fake busybox binary to simulate a POSIX shell\n"
         );
+        assert_eq!(logger.get_logs(), "");
     }
 
     #[test]
@@ -604,9 +594,11 @@ mod tests {
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
         let options = ExtractOptions::new(false, None, patterns, false, None);
-        extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
+        assert_eq!(logger.get_logs(), "");
     }
 
     #[test]
@@ -615,11 +607,13 @@ mod tests {
         let patterns: Vec<Pattern> = vec![Pattern::new("*/b?n/sh").unwrap()];
         let mut output = Vec::new();
         let options = ExtractOptions::new(false, None, patterns, false, None);
-        extract_cpio_archive(archive, Some(&mut output), &options, LOG_LEVEL_WARNING).unwrap();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             "This is a fake busybox binary to simulate a POSIX shell\n"
         );
+        assert_eq!(logger.get_logs(), "");
     }
 
     #[test]
@@ -629,9 +623,11 @@ mod tests {
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("path").unwrap()];
         let options = ExtractOptions::new(false, None, patterns, false, None);
-        extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
+        assert_eq!(logger.get_logs(), "");
     }
 
     #[test]
@@ -640,9 +636,11 @@ mod tests {
         let archive = File::open(tests_path("single.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let options = ExtractOptions::new(false, None, Vec::new(), false, Some("cpio".into()));
-        extract_cpio_archive(archive, None::<&mut Stdout>, &options, LOG_LEVEL_WARNING).unwrap();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         let path = tempdir.path.join("cpio1/path/file");
         assert!(path.exists());
+        assert_eq!(logger.get_logs(), "");
     }
 
     // Test detecting path traversal attacks like CVE-2015-1197
@@ -651,12 +649,13 @@ mod tests {
         let _lock = TEST_LOCK.lock().unwrap();
         let mut archive = File::open(tests_path("path-traversal.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
         let got = read_cpio_and_extract(
             &mut archive,
             &tempdir.path,
             &mut None::<Stdout>,
             &ExtractOptions::default(),
-            LOG_LEVEL_WARNING,
+            &mut logger,
         )
         .unwrap_err();
         assert_eq!(got.kind(), ErrorKind::InvalidData);
@@ -664,6 +663,7 @@ mod tests {
             "The parent directory of \"tmp/trav.txt\" (resolved to \"/tmp\") is not within the directory {:#?}.",
             &tempdir.path
         ));
+        assert_eq!(logger.get_logs(), "");
     }
 
     #[test]
@@ -671,15 +671,17 @@ mod tests {
         let mut archive = File::open(tests_path("path-traversal.cpio")).unwrap();
         let base_dir = std::env::current_dir().unwrap();
         let mut output = Vec::new();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
         read_cpio_and_extract(
             &mut archive,
             &base_dir,
             &mut Some(&mut output),
             &ExtractOptions::default(),
-            LOG_LEVEL_WARNING,
+            &mut logger,
         )
         .unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "TEST Traversal\n");
+        assert_eq!(logger.get_logs(), "");
     }
 
     #[test]
@@ -693,7 +695,8 @@ mod tests {
         let mut header = Header::new(1, 0o20_644, 0, 0, 0, 1740402179, 0, 0, 0, "./null");
         header.rmajor = 1;
         header.rminor = 3;
-        write_character_device(&header, true, LOG_LEVEL_WARNING).unwrap();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        write_character_device(&header, true, &mut logger).unwrap();
 
         let attr = std::fs::metadata("null").unwrap();
         assert_eq!(attr.len(), header.filesize.into());
@@ -704,6 +707,7 @@ mod tests {
         assert_eq!(attr.gid(), header.gid);
         assert_eq!(major(attr.rdev()), header.rmajor);
         assert_eq!(minor(attr.rdev()), header.rminor);
+        assert_eq!(logger.get_logs(), "");
         std::fs::remove_file("null").unwrap();
     }
 
@@ -724,13 +728,15 @@ mod tests {
             0,
             "./directory_with_setuid",
         );
-        write_directory(&header, true, LOG_LEVEL_WARNING, &mut mtimes).unwrap();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        write_directory(&header, true, &mut logger, &mut mtimes).unwrap();
 
         let attr = std::fs::metadata("directory_with_setuid").unwrap();
         assert!(attr.is_dir());
         assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
         assert_eq!(attr.uid(), header.uid);
         assert_eq!(attr.gid(), header.gid);
+        assert_eq!(logger.get_logs(), "");
         std::fs::remove_dir("directory_with_setuid").unwrap();
 
         let mut expected_mtimes: BTreeMap<String, i64> = BTreeMap::new();
@@ -756,12 +762,13 @@ mod tests {
             "./file_with_setuid",
         );
         let cpio = b"!/bin/sh\n\0\0\0";
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
         write_file(
             &mut cpio.as_ref(),
             &header,
             true,
             &mut seen_files,
-            LOG_LEVEL_WARNING,
+            &mut logger,
         )
         .unwrap();
 
@@ -772,6 +779,7 @@ mod tests {
         assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
         assert_eq!(attr.uid(), header.uid);
         assert_eq!(attr.gid(), header.gid);
+        assert_eq!(logger.get_logs(), "");
         std::fs::remove_file("file_with_setuid").unwrap();
     }
 
@@ -792,7 +800,8 @@ mod tests {
             "./dead_symlink",
         );
         let cpio = b"/nonexistent";
-        write_symbolic_link(&mut cpio.as_ref(), &header, true, LOG_LEVEL_WARNING).unwrap();
+        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        write_symbolic_link(&mut cpio.as_ref(), &header, true, &mut logger).unwrap();
 
         let attr = std::fs::symlink_metadata("dead_symlink").unwrap();
         assert_eq!(attr.len(), header.filesize.into());
@@ -801,6 +810,7 @@ mod tests {
         assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
         assert_eq!(attr.uid(), header.uid);
         assert_eq!(attr.gid(), header.gid);
+        assert_eq!(logger.get_logs(), "");
         std::fs::remove_file("dead_symlink").unwrap();
     }
 }

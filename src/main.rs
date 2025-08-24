@@ -12,7 +12,7 @@ use glob::Pattern;
 use lexopt::prelude::*;
 
 use threecpio::extract::{extract_cpio_archive, ExtractOptions};
-use threecpio::logger::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING};
+use threecpio::logger::{Logger, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING};
 use threecpio::ranges::Ranges;
 use threecpio::{
     create_cpio_archive, examine_cpio_content, get_cpio_archive_count, list_cpio_content,
@@ -285,6 +285,7 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    let mut logger = Logger::new_stderr(args.log_level);
 
     if args.create {
         let mut archive = None;
@@ -307,7 +308,7 @@ fn main() -> ExitCode {
             );
             return ExitCode::FAILURE;
         }
-        let result = create_cpio_archive(archive, args.data_alignment, args.log_level);
+        let result = create_cpio_archive(archive, args.data_alignment, &mut logger);
         if let Err(error) = result {
             match error.kind() {
                 ErrorKind::BrokenPipe => {}
@@ -359,7 +360,7 @@ fn main() -> ExitCode {
                 archive,
                 args.to_stdout.then_some(&mut stdout),
                 &args.extract_options(),
-                args.log_level,
+                &mut logger,
             ),
         )
     } else if args.list {

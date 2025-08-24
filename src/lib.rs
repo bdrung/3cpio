@@ -15,10 +15,13 @@ use crate::header::{
     read_filename_from_next_cpio_object, Header, CPIO_ALIGNMENT, TRAILER_FILENAME,
 };
 use crate::libc::strftime_local;
-use crate::logger::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
+use crate::logger::{Logger, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
 use crate::manifest::Manifest;
 use crate::ranges::Ranges;
 use crate::seek_forward::SeekForward;
+
+#[macro_use]
+pub mod logger;
 
 mod compression;
 mod extended_error;
@@ -26,7 +29,6 @@ pub mod extract;
 mod filetype;
 mod header;
 mod libc;
-pub mod logger;
 mod manifest;
 pub mod ranges;
 mod seek_forward;
@@ -276,22 +278,18 @@ fn get_source_date_epoch() -> Option<u32> {
 /// **Warning**: This function was designed for the `3cpio` command-line application.
 /// The API can change between releases and no stability promises are given.
 /// Please get in contact to support your use case and make the API for this function stable.
-pub fn create_cpio_archive(
+pub fn create_cpio_archive<W: Write>(
     archive: Option<File>,
     alignment: Option<NonZeroU32>,
-    log_level: u32,
+    logger: &mut Logger<W>,
 ) -> Result<u64> {
     let source_date_epoch = get_source_date_epoch();
     let stdin = std::io::stdin();
     let buf_reader = std::io::BufReader::new(stdin);
-    if log_level >= LOG_LEVEL_DEBUG {
-        eprintln!("Parsing manifest from stdin...");
-    }
-    let manifest = Manifest::from_input(buf_reader, log_level)?;
-    if log_level >= LOG_LEVEL_DEBUG {
-        eprintln!("Writing cpio...");
-    }
-    manifest.write_archive(archive, alignment, source_date_epoch, log_level)
+    debug!(logger, "Parsing manifest from stdin...")?;
+    let manifest = Manifest::from_input(buf_reader, logger)?;
+    debug!(logger, "Writing cpio...")?;
+    manifest.write_archive(archive, alignment, source_date_epoch, logger)
 }
 
 /// List the offsets of the cpio archives and their compression.
