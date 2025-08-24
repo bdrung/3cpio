@@ -757,7 +757,7 @@ mod tests {
     use std::path::Path;
 
     use super::*;
-    use crate::logger::LOG_LEVEL_WARNING;
+    use crate::logger::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING};
     use crate::temp_dir::TempDir;
     use crate::tests::TEST_LOCK;
 
@@ -1283,7 +1283,7 @@ mod tests {
         # This is a comment\n\n\
         /bin\tbin\tdir\t755\t0\t0\t1681992796\n\
         /usr/bin/gzip\tbin/gzip\tfile\t755\t0\t0\t1739259005\t35288\n";
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
         let manifest = Manifest::from_input(input.as_ref(), &mut logger).unwrap();
         let stat = symlink_metadata("/usr/bin/gzip").unwrap();
         let key = get_hardlink_key(&stat);
@@ -1302,7 +1302,11 @@ mod tests {
             HashMap::from([(key, Hardlink::new("/usr/bin/gzip", 35288))]),
         );
         assert_eq!(manifest, Manifest::new(vec![expected_archive], 0o022));
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(
+            logger.get_logs(),
+            "Parsing line 3: /bin\tbin\tdir\t755\t0\t0\t1681992796\n\
+            Parsing line 4: /usr/bin/gzip\tbin/gzip\tfile\t755\t0\t0\t1739259005\t35288\n",
+        );
     }
 
     #[test]
@@ -1310,7 +1314,7 @@ mod tests {
         let input = b"\
         #cpio: zstd -1\n\
         /bin\tbin\tdir\t755\t0\t0\t1681992796\n";
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         let manifest = Manifest::from_input(input.as_ref(), &mut logger).unwrap();
         let expected_archive = Archive::with_files_compressed(
             vec![File::new(
@@ -1335,7 +1339,7 @@ mod tests {
         /bin\tbin\tdir\t755\t0\t0\t1681992796\n\
         #cpio\n\
         /\t.\tdir\t755\t0\t0\t1732230747\n";
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
         let manifest = Manifest::from_input(input.as_ref(), &mut logger).unwrap();
         let expected_manifest = Manifest::new(
             vec![
@@ -1359,13 +1363,19 @@ mod tests {
             0,
         );
         assert_eq!(manifest, expected_manifest);
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(
+            logger.get_logs(),
+            "Parsing line 3: #cpio\n\
+            Parsing line 4: /bin\tbin\tdir\t755\t0\t0\t1681992796\n\
+            Parsing line 5: #cpio\n\
+            Parsing line 6: /\t.\tdir\t755\t0\t0\t1732230747\n",
+        );
     }
 
     #[test]
     fn test_manifest_from_input_file_not_found() {
         let input = b"/nonexistent\n";
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         let got = Manifest::from_input(input.as_ref(), &mut logger).unwrap_err();
         assert_eq!(got.kind(), ErrorKind::NotFound);
         assert_eq!(
@@ -1391,7 +1401,7 @@ mod tests {
     #[test]
     fn test_manifest_from_input_unknown_compressor() {
         let input = b"#cpio: brotli\n";
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         let got = Manifest::from_input(input.as_ref(), &mut logger).unwrap_err();
         assert_eq!(got.kind(), ErrorKind::InvalidData);
         assert_eq!(
@@ -1406,7 +1416,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path.join("initrd.img");
         let input = b"#cpio: bzip2 -3\n";
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         let manifest = Manifest::from_input(input.as_ref(), &mut logger).unwrap();
         let file = std::fs::File::create(&path).unwrap();
         let size = manifest
@@ -1600,7 +1610,7 @@ mod tests {
         let archive = Archive::with_files_compressed(vec![root_dir], Compression::Failing);
         let manifest = Manifest::new(vec![archive], 0o022);
         let file = std::fs::File::create(temp_dir.path.join("initrd.img")).unwrap();
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
         let got = manifest
             .write_archive(Some(file), None, None, &mut logger)
             .unwrap_err();
@@ -1608,7 +1618,12 @@ mod tests {
             matches!(got.kind(), ErrorKind::Other if got.to_string() == "false failed: exit status: 1")
                 || matches!(got.kind(), ErrorKind::BrokenPipe)
         );
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(
+            logger.get_logs(),
+            ".\n\
+            Header { ino: 0, mode: 16877, uid: 819, gid: 66, nlink: 2, mtime: 1749125499, \
+            filesize: 0, major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \".\" }\n",
+        );
     }
 
     #[test]
@@ -1652,7 +1667,7 @@ mod tests {
             File::new(Filetype::EmptyFile, "fstab", 0o644, 0x339, 0x48, 0x6E44C280),
         ]);
         let mut output = Vec::new();
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         let size = archive
             .write(&mut output, None, Some(0x6B49D200), 0, &mut logger)
             .unwrap();
@@ -1685,7 +1700,10 @@ mod tests {
         );
         assert_eq!(size, 952);
         assert_eq!(archive.size(), 952);
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(
+            logger.get_logs(),
+            ".\nloop0\nconsole\nsbin\ninitctl\nnotify\nfstab\n"
+        );
     }
 
     #[test]
@@ -1723,7 +1741,7 @@ mod tests {
             hardlinks,
         );
         let mut output = Vec::new();
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         let size = archive
             .write(
                 &mut output,
@@ -1753,7 +1771,7 @@ mod tests {
         );
         assert_eq!(size, 560);
         assert_eq!(archive.size(), 536);
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(logger.get_logs(), ".\nexample\nsmall.txt\n");
     }
 
     #[test]
@@ -1789,7 +1807,7 @@ mod tests {
             HashMap::from([(8921120, Hardlink::with_references(&path, 7, 2))]),
         );
         let mut output = Vec::new();
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         let size = archive
             .write(&mut output, None, None, 0, &mut logger)
             .unwrap();
@@ -1807,6 +1825,6 @@ mod tests {
         );
         assert_eq!(size, 356);
         assert_eq!(archive.size(), 356);
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(logger.get_logs(), "a\nb\n");
     }
 }
