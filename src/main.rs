@@ -12,7 +12,7 @@ use glob::Pattern;
 use lexopt::prelude::*;
 
 use threecpio::extract::{extract_cpio_archive, ExtractOptions};
-use threecpio::logger::{Logger, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING};
+use threecpio::logger::{Level, Logger};
 use threecpio::ranges::Ranges;
 use threecpio::{
     create_cpio_archive, examine_cpio_content, get_cpio_archive_count, list_cpio_content,
@@ -28,7 +28,7 @@ struct Args {
     extract: bool,
     force: bool,
     list: bool,
-    log_level: u32,
+    log_level: Level,
     archive: Option<String>,
     make_directories: bool,
     parts: Option<Ranges>,
@@ -100,7 +100,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     let mut parts = None;
     let mut preserve_permissions = is_root();
     let mut list = 0;
-    let mut log_level = LOG_LEVEL_WARNING;
+    let mut log_level = Level::Warning;
     let mut directory = ".".into();
     let mut archive = None;
     let mut make_directories = false;
@@ -132,7 +132,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
                 };
             }
             Long("debug") => {
-                log_level = LOG_LEVEL_DEBUG;
+                log_level = Level::Debug;
             }
             Short('e') | Long("examine") => {
                 examine = 1;
@@ -163,8 +163,8 @@ fn parse_args() -> Result<Args, lexopt::Error> {
                 to_stdout = true;
             }
             Short('v') | Long("verbose") => {
-                if log_level <= LOG_LEVEL_INFO {
-                    log_level = LOG_LEVEL_INFO;
+                if log_level <= Level::Info {
+                    log_level = Level::Info;
                 }
             }
             Short('V') | Long("version") => {
@@ -285,7 +285,7 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let mut logger = Logger::new_stderr(args.log_level);
+    let mut logger = Logger::new_stderr(args.log_level.clone());
 
     if args.create {
         let mut archive = None;
@@ -297,7 +297,7 @@ fn main() -> ExitCode {
                     return ExitCode::FAILURE;
                 }
             };
-            if args.log_level >= LOG_LEVEL_DEBUG {
+            if args.log_level >= Level::Debug {
                 eprintln!("{executable}: Opened '{path}' for writing.");
             }
         }

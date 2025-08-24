@@ -15,7 +15,7 @@ use crate::header::{
     read_filename_from_next_cpio_object, Header, CPIO_ALIGNMENT, TRAILER_FILENAME,
 };
 use crate::libc::strftime_local;
-use crate::logger::{Logger, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO};
+use crate::logger::{Level, Logger};
 use crate::manifest::Manifest;
 use crate::ranges::Ranges;
 use crate::seek_forward::SeekForward;
@@ -328,7 +328,7 @@ pub fn list_cpio_content<W: Write>(
     out: &mut W,
     parts: Option<&Ranges>,
     patterns: &Vec<Pattern>,
-    log_level: u32,
+    log_level: Level,
 ) -> Result<()> {
     let mut user_group_cache = UserGroupCache::new();
     let now = SystemTime::now()
@@ -352,28 +352,28 @@ pub fn list_cpio_content<W: Write>(
             break;
         }
         if compression.is_uncompressed() {
-            if log_level >= LOG_LEVEL_INFO {
+            if log_level >= Level::Info {
                 read_cpio_and_print_long_format(
                     &mut archive,
                     out,
                     patterns,
                     now,
                     &mut user_group_cache,
-                    log_level >= LOG_LEVEL_DEBUG,
+                    log_level >= Level::Debug,
                 )?;
             } else {
                 read_cpio_and_print_filenames(&mut archive, out, patterns)?;
             }
         } else {
             let mut decompressed = compression.decompress(archive)?;
-            if log_level >= LOG_LEVEL_INFO {
+            if log_level >= Level::Info {
                 read_cpio_and_print_long_format(
                     &mut decompressed,
                     out,
                     patterns,
                     now,
                     &mut user_group_cache,
-                    log_level >= LOG_LEVEL_DEBUG,
+                    log_level >= Level::Debug,
                 )?;
             } else {
                 read_cpio_and_print_filenames(&mut decompressed, out, patterns)?;
@@ -390,7 +390,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use super::*;
-    use crate::logger::LOG_LEVEL_WARNING;
+    use crate::logger::Level;
 
     // Lock for tests that rely on / change the current directory
     pub(crate) static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
@@ -437,7 +437,7 @@ mod tests {
             &mut output,
             Some(&"2-".parse::<Ranges>().unwrap()),
             &Vec::new(),
-            LOG_LEVEL_WARNING,
+            Level::Warning,
         )
         .unwrap();
         assert_eq!(
@@ -451,7 +451,7 @@ mod tests {
         let archive = File::open(tests_path("xz.cpio")).unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
         let mut output = Vec::new();
-        list_cpio_content(archive, &mut output, None, &patterns, LOG_LEVEL_WARNING).unwrap();
+        list_cpio_content(archive, &mut output, None, &patterns, Level::Warning).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "path\n");
     }
 
@@ -460,7 +460,7 @@ mod tests {
         let archive = File::open(tests_path("single.cpio")).unwrap();
         let patterns = vec![Pattern::new("*/file").unwrap()];
         let mut output = Vec::new();
-        list_cpio_content(archive, &mut output, None, &patterns, LOG_LEVEL_WARNING).unwrap();
+        list_cpio_content(archive, &mut output, None, &patterns, Level::Warning).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "path/file\n");
     }
 

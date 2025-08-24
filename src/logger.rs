@@ -3,12 +3,16 @@
 
 use std::io::{Stderr, Write};
 
-/// The warning level. Designates hazardous situations.
-pub const LOG_LEVEL_WARNING: u32 = 5;
-/// The info level. Designates useful information.
-pub const LOG_LEVEL_INFO: u32 = 7;
-/// The debug level. Designates lower priority information and for debugging.
-pub const LOG_LEVEL_DEBUG: u32 = 8;
+/// An enum representing the available verbosity levels of the logger.
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub enum Level {
+    /// The warning level. Designates hazardous situations.
+    Warning = 5,
+    /// The info level. Designates useful information.
+    Info = 7,
+    /// The debug level. Designates lower priority information and for debugging.
+    Debug = 8,
+}
 
 macro_rules! debug {
     ($dst:ident, $($arg:tt)*) => {
@@ -36,23 +40,23 @@ macro_rules! info {
 /// as parameter in the logging macros.
 #[derive(Debug)]
 pub struct Logger<W: Write> {
-    level: u32,
+    level: Level,
     pub(crate) out: W,
 }
 
 impl<W: Write> Logger<W> {
     pub(crate) fn is_enabled_for_debug(&self) -> bool {
-        self.level >= LOG_LEVEL_DEBUG
+        self.level >= Level::Debug
     }
 
     pub(crate) fn is_enabled_for_info(&self) -> bool {
-        self.level >= LOG_LEVEL_INFO
+        self.level >= Level::Info
     }
 }
 
 impl Logger<Stderr> {
     /// Create a new `Logger` that logs to standard error (stderr).
-    pub fn new_stderr(level: u32) -> Self {
+    pub fn new_stderr(level: Level) -> Self {
         Self {
             level,
             out: std::io::stderr(),
@@ -62,7 +66,7 @@ impl Logger<Stderr> {
 
 #[cfg(test)]
 impl Logger<Vec<u8>> {
-    pub(crate) fn new_vec(level: u32) -> Self {
+    pub(crate) fn new_vec(level: Level) -> Self {
         Self {
             level,
             out: Vec::new(),

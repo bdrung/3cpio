@@ -504,7 +504,7 @@ mod tests {
 
     use super::*;
     use crate::libc::{major, minor};
-    use crate::logger::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING};
+    use crate::logger::Level;
     use crate::temp_dir::TempDir;
     use crate::tests::{tests_path, TEST_LOCK};
 
@@ -547,7 +547,7 @@ mod tests {
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("p?th/f*").unwrap()];
         let options = ExtractOptions::new(true, None, patterns, false, None);
-        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
+        let mut logger = Logger::new_vec(Level::Info);
 
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         assert!(tempdir.path.join("path").is_dir());
@@ -567,7 +567,7 @@ mod tests {
             false,
             None,
         );
-        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
+        let mut logger = Logger::new_vec(Level::Info);
         extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "content\n");
         assert_eq!(logger.get_logs(), ".\npath\npath/file\n");
@@ -578,7 +578,7 @@ mod tests {
         let archive = File::open(tests_path("bzip2.cpio")).unwrap();
         let mut output = Vec::new();
         let options = ExtractOptions::default();
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(Level::Warning);
         extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
@@ -594,7 +594,7 @@ mod tests {
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
         let options = ExtractOptions::new(false, None, patterns, false, None);
-        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
+        let mut logger = Logger::new_vec(Level::Debug);
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
@@ -626,7 +626,7 @@ mod tests {
         let patterns: Vec<Pattern> = vec![Pattern::new("*/b?n/sh").unwrap()];
         let mut output = Vec::new();
         let options = ExtractOptions::new(false, None, patterns, false, None);
-        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
+        let mut logger = Logger::new_vec(Level::Info);
         extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
@@ -642,7 +642,7 @@ mod tests {
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("path").unwrap()];
         let options = ExtractOptions::new(false, None, patterns, false, None);
-        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
+        let mut logger = Logger::new_vec(Level::Info);
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
@@ -655,7 +655,7 @@ mod tests {
         let archive = File::open(tests_path("single.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let options = ExtractOptions::new(false, None, Vec::new(), false, Some("cpio".into()));
-        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
+        let mut logger = Logger::new_vec(Level::Info);
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         let path = tempdir.path.join("cpio1/path/file");
         assert!(path.exists());
@@ -668,7 +668,7 @@ mod tests {
         let _lock = TEST_LOCK.lock().unwrap();
         let mut archive = File::open(tests_path("path-traversal.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
-        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
+        let mut logger = Logger::new_vec(Level::Info);
         let got = read_cpio_and_extract(
             &mut archive,
             &tempdir.path,
@@ -690,7 +690,7 @@ mod tests {
         let mut archive = File::open(tests_path("path-traversal.cpio")).unwrap();
         let base_dir = std::env::current_dir().unwrap();
         let mut output = Vec::new();
-        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
+        let mut logger = Logger::new_vec(Level::Info);
         read_cpio_and_extract(
             &mut archive,
             &base_dir,
@@ -714,7 +714,7 @@ mod tests {
         let mut header = Header::new(1, 0o20_644, 0, 0, 0, 1740402179, 0, 0, 0, "./null");
         header.rmajor = 1;
         header.rminor = 3;
-        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
+        let mut logger = Logger::new_vec(Level::Debug);
         write_character_device(&header, true, &mut logger).unwrap();
 
         let attr = std::fs::metadata("null").unwrap();
@@ -750,7 +750,7 @@ mod tests {
             0,
             "./directory_with_setuid",
         );
-        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
+        let mut logger = Logger::new_vec(Level::Debug);
         write_directory(&header, true, &mut logger, &mut mtimes).unwrap();
 
         let attr = std::fs::metadata("directory_with_setuid").unwrap();
@@ -791,7 +791,7 @@ mod tests {
             "./file_with_setuid",
         );
         let cpio = b"!/bin/sh\n\0\0\0";
-        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
+        let mut logger = Logger::new_vec(Level::Debug);
         write_file(
             &mut cpio.as_ref(),
             &header,
@@ -836,7 +836,7 @@ mod tests {
             "./dead_symlink",
         );
         let cpio = b"/nonexistent";
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(Level::Warning);
         write_symbolic_link(&mut cpio.as_ref(), &header, true, &mut logger).unwrap();
 
         let attr = std::fs::symlink_metadata("dead_symlink").unwrap();
