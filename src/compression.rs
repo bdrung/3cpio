@@ -305,30 +305,20 @@ impl Compression {
     }
 }
 
-pub(crate) fn read_magic_header<R: Read + Seek>(file: &mut R) -> Option<Result<Compression>> {
+pub(crate) fn read_magic_header<R: Read + Seek>(file: &mut R) -> Result<Option<Compression>> {
     let mut buffer = [0; 4];
     while buffer == [0, 0, 0, 0] {
         match file.read_exact(&mut buffer) {
             Ok(()) => {}
             Err(e) => match e.kind() {
-                ErrorKind::UnexpectedEof => return None,
-                _ => return Some(Err(e)),
+                ErrorKind::UnexpectedEof => return Ok(None),
+                _ => return Err(e),
             },
         };
     }
-    match file.seek(SeekFrom::Current(-4)) {
-        Ok(_) => {}
-        Err(e) => {
-            return Some(Err(e));
-        }
-    };
-    let compression = match Compression::from_magic_number(buffer) {
-        Ok(compression) => compression,
-        Err(e) => {
-            return Some(Err(e));
-        }
-    };
-    Some(Ok(compression))
+    file.seek(SeekFrom::Current(-4))?;
+    let compression = Compression::from_magic_number(buffer)?;
+    Ok(Some(compression))
 }
 
 #[cfg(test)]

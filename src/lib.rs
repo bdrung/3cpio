@@ -240,9 +240,9 @@ fn seek_to_cpio_end(archive: &mut File) -> Result<()> {
 pub fn get_cpio_archive_count(archive: &mut File) -> Result<u32> {
     let mut count = 0;
     loop {
-        let compression = match read_magic_header(archive) {
+        let compression = match read_magic_header(archive)? {
             None => return Ok(count),
-            Some(x) => x?,
+            Some(x) => x,
         };
         count += 1;
         if compression.is_uncompressed() {
@@ -299,9 +299,9 @@ pub fn create_cpio_archive<W: Write>(
 /// Please get in contact to support your use case and make the API for this function stable.
 pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<()> {
     loop {
-        let compression = match read_magic_header(&mut archive) {
+        let compression = match read_magic_header(&mut archive)? {
             None => return Ok(()),
-            Some(x) => x?,
+            Some(x) => x,
         };
         writeln!(
             out,
@@ -340,9 +340,9 @@ pub fn list_cpio_content<W: Write>(
     let mut count = 0;
     loop {
         count += 1;
-        let compression = match read_magic_header(&mut archive) {
+        let compression = match read_magic_header(&mut archive)? {
             None => return Ok(()),
-            Some(x) => x?,
+            Some(x) => x,
         };
         if parts.is_some_and(|f| !f.contains(&count)) {
             if compression.is_uncompressed() && parts.unwrap().has_more(&count) {

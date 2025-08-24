@@ -156,9 +156,9 @@ pub fn extract_cpio_archive<W: Write, LW: Write>(
     let base_dir = std::env::current_dir()?;
     loop {
         count += 1;
-        let compression = match read_magic_header(&mut archive) {
+        let compression = match read_magic_header(&mut archive)? {
             None => return Ok(()),
-            Some(x) => x?,
+            Some(x) => x,
         };
         if options.parts.as_ref().is_some_and(|f| !f.contains(&count)) {
             if compression.is_uncompressed() && options.parts.as_ref().unwrap().has_more(&count) {
