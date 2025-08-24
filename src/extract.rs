@@ -504,7 +504,7 @@ mod tests {
 
     use super::*;
     use crate::libc::{major, minor};
-    use crate::logger::LOG_LEVEL_WARNING;
+    use crate::logger::{LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARNING};
     use crate::temp_dir::TempDir;
     use crate::tests::{tests_path, TEST_LOCK};
 
@@ -547,13 +547,13 @@ mod tests {
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("p?th/f*").unwrap()];
         let options = ExtractOptions::new(true, None, patterns, false, None);
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
 
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(tempdir.path.join("path/file").exists());
         assert!(!tempdir.path.join("usr").exists());
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(logger.get_logs(), "path/file\n");
     }
 
     #[test]
@@ -567,10 +567,10 @@ mod tests {
             false,
             None,
         );
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "content\n");
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(logger.get_logs(), ".\npath\npath/file\n");
     }
 
     #[test]
@@ -594,11 +594,30 @@ mod tests {
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("p?th").unwrap()];
         let options = ExtractOptions::new(false, None, patterns, false, None);
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(
+            logger.get_logs(),
+            "Header { ino: 0, mode: 16893, uid: 0, gid: 0, nlink: 2, mtime: 1713104326, filesize: 0, \
+            major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \".\" }\n\
+            Header { ino: 1, mode: 16893, uid: 0, gid: 0, nlink: 2, mtime: 1713104326, filesize: 0, \
+            major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \"path\" }\n\
+            path\n\
+            Creating directory 'path' with mode 775\n\
+            Header { ino: 2, mode: 33204, uid: 0, gid: 0, nlink: 1, mtime: 1713104326, filesize: 8, \
+            major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \"path/file\" }\n\
+            set mtime 1713104326 for 'path'\n\
+            Header { ino: 0, mode: 16893, uid: 0, gid: 0, nlink: 2, mtime: 1713104326, filesize: 0, \
+            major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \".\" }\n\
+            Header { ino: 1, mode: 16893, uid: 0, gid: 0, nlink: 2, mtime: 1713104326, filesize: 0, \
+            major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \"usr\" }\n\
+            Header { ino: 2, mode: 16893, uid: 0, gid: 0, nlink: 2, mtime: 1713104326, filesize: 0, \
+            major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \"usr/bin\" }\n\
+            Header { ino: 3, mode: 33204, uid: 0, gid: 0, nlink: 1, mtime: 1713104326, filesize: 56, \
+            major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \"usr/bin/sh\" }\n"
+        );
     }
 
     #[test]
@@ -607,13 +626,13 @@ mod tests {
         let patterns: Vec<Pattern> = vec![Pattern::new("*/b?n/sh").unwrap()];
         let mut output = Vec::new();
         let options = ExtractOptions::new(false, None, patterns, false, None);
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             "This is a fake busybox binary to simulate a POSIX shell\n"
         );
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(logger.get_logs(), "usr/bin/sh\n");
     }
 
     #[test]
@@ -623,11 +642,11 @@ mod tests {
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let patterns = vec![Pattern::new("path").unwrap()];
         let options = ExtractOptions::new(false, None, patterns, false, None);
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(logger.get_logs(), "path\n");
     }
 
     #[test]
@@ -636,11 +655,11 @@ mod tests {
         let archive = File::open(tests_path("single.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let options = ExtractOptions::new(false, None, Vec::new(), false, Some("cpio".into()));
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
         let path = tempdir.path.join("cpio1/path/file");
         assert!(path.exists());
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(logger.get_logs(), ".\npath\npath/file\n");
     }
 
     // Test detecting path traversal attacks like CVE-2015-1197
@@ -649,7 +668,7 @@ mod tests {
         let _lock = TEST_LOCK.lock().unwrap();
         let mut archive = File::open(tests_path("path-traversal.cpio")).unwrap();
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         let got = read_cpio_and_extract(
             &mut archive,
             &tempdir.path,
@@ -663,7 +682,7 @@ mod tests {
             "The parent directory of \"tmp/trav.txt\" (resolved to \"/tmp\") is not within the directory {:#?}.",
             &tempdir.path
         ));
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(logger.get_logs(), ".\ntmp\ntmp/trav.txt\n");
     }
 
     #[test]
@@ -671,7 +690,7 @@ mod tests {
         let mut archive = File::open(tests_path("path-traversal.cpio")).unwrap();
         let base_dir = std::env::current_dir().unwrap();
         let mut output = Vec::new();
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_INFO);
         read_cpio_and_extract(
             &mut archive,
             &base_dir,
@@ -681,7 +700,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "TEST Traversal\n");
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(logger.get_logs(), ".\ntmp\ntmp/trav.txt\n");
     }
 
     #[test]
@@ -695,7 +714,7 @@ mod tests {
         let mut header = Header::new(1, 0o20_644, 0, 0, 0, 1740402179, 0, 0, 0, "./null");
         header.rmajor = 1;
         header.rminor = 3;
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
         write_character_device(&header, true, &mut logger).unwrap();
 
         let attr = std::fs::metadata("null").unwrap();
@@ -707,7 +726,10 @@ mod tests {
         assert_eq!(attr.gid(), header.gid);
         assert_eq!(major(attr.rdev()), header.rmajor);
         assert_eq!(minor(attr.rdev()), header.rminor);
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(
+            logger.get_logs(),
+            "Creating character device './null' with mode 644\n"
+        );
         std::fs::remove_file("null").unwrap();
     }
 
@@ -728,7 +750,7 @@ mod tests {
             0,
             "./directory_with_setuid",
         );
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
         write_directory(&header, true, &mut logger, &mut mtimes).unwrap();
 
         let attr = std::fs::metadata("directory_with_setuid").unwrap();
@@ -736,7 +758,14 @@ mod tests {
         assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
         assert_eq!(attr.uid(), header.uid);
         assert_eq!(attr.gid(), header.gid);
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(
+            logger.get_logs(),
+            format!(
+                "Creating directory './directory_with_setuid' with mode 3777 and owner {}:{}\n",
+                getuid(),
+                getgid(),
+            ),
+        );
         std::fs::remove_dir("directory_with_setuid").unwrap();
 
         let mut expected_mtimes: BTreeMap<String, i64> = BTreeMap::new();
@@ -762,7 +791,7 @@ mod tests {
             "./file_with_setuid",
         );
         let cpio = b"!/bin/sh\n\0\0\0";
-        let mut logger = Logger::new_vec(LOG_LEVEL_WARNING);
+        let mut logger = Logger::new_vec(LOG_LEVEL_DEBUG);
         write_file(
             &mut cpio.as_ref(),
             &header,
@@ -779,7 +808,14 @@ mod tests {
         assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
         assert_eq!(attr.uid(), header.uid);
         assert_eq!(attr.gid(), header.gid);
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(
+            logger.get_logs(),
+            format!(
+                "Creating file './file_with_setuid' with permission 4755 and owner {}:{} and 9 bytes\n",
+                getuid(),
+                getgid(),
+            ),
+        );
         std::fs::remove_file("file_with_setuid").unwrap();
     }
 
