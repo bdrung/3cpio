@@ -12,7 +12,7 @@ use glob::Pattern;
 use crate::compression::read_magic_header;
 use crate::filetype::*;
 use crate::header::{
-    read_filename_from_next_cpio_object, Header, CPIO_ALIGNMENT, TRAILER_FILENAME,
+    read_file_name_and_size_from_next_cpio_object, Header, CPIO_ALIGNMENT, TRAILER_FILENAME,
 };
 use crate::libc::strftime_local;
 use crate::logger::{Level, Logger};
@@ -42,15 +42,15 @@ impl<R: Read + SeekForward> Iterator for CpioFilenameReader<'_, R> {
     type Item = Result<String>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match read_filename_from_next_cpio_object(self.archive) {
-            Ok(filename) => {
+        match read_file_name_and_size_from_next_cpio_object(self.archive) {
+            Ok((filename, _)) => {
                 if filename == TRAILER_FILENAME {
                     None
                 } else {
                     Some(Ok(filename))
                 }
             }
-            x => Some(x),
+            Err(x) => Some(Err(x)),
         }
     }
 }

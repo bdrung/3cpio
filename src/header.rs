@@ -341,9 +341,9 @@ fn read_filename<R: Read>(archive: &mut R, namesize: u64) -> Result<String> {
 ///
 /// Read the next cpio object header, check the magic, skip the file data.
 /// Return the file name.
-pub(crate) fn read_filename_from_next_cpio_object<R: Read + SeekForward>(
+pub(crate) fn read_file_name_and_size_from_next_cpio_object<R: Read + SeekForward>(
     archive: &mut R,
-) -> Result<String> {
+) -> Result<(String, u32)> {
     let mut header = [0; CPIO_HEADER_LENGTH as usize];
     archive.read_exact(&mut header)?;
     check_begins_with_cpio_magic_header(&header)?;
@@ -351,7 +351,7 @@ pub(crate) fn read_filename_from_next_cpio_object<R: Read + SeekForward>(
     let namesize = hex_str_to_u32(&header[94..102])?;
     let filename = read_filename(archive, namesize.into())?;
     skip_file_content(archive, filesize)?;
-    Ok(filename)
+    Ok((filename, filesize))
 }
 
 fn skip_file_content<R: SeekForward>(archive: &mut R, filesize: u32) -> Result<()> {
