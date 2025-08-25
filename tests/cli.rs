@@ -3,8 +3,9 @@
 
 use std::env;
 use std::error::Error;
-use std::fs::File;
+use std::fs::{symlink_metadata, File};
 use std::io::{ErrorKind, Read, Write};
+use std::os::unix::fs::MetadataExt;
 use std::process::{Command, Output, Stdio};
 use std::time::SystemTime;
 
@@ -321,13 +322,18 @@ fn test_examine_compressed_cpio() -> Result<(), Box<dyn Error>> {
         if program_not_available(compression) {
             continue;
         }
+        let path = format!("tests/{compression}.cpio");
         let mut cmd = get_command();
-        cmd.arg("-e").arg(format!("tests/{compression}.cpio"));
+        cmd.arg("-e").arg(&path);
+        let size = symlink_metadata(&path)?.size();
 
         cmd.output()?
             .assert_stderr("")
             .assert_success()
-            .assert_stdout(format!("0\tcpio\n512\t{compression}\n"));
+            .assert_stdout(format!(
+                "0\t512\t512\tcpio\t8\n512\t{size}\t{}\t{compression}\t56\n",
+                size - 512
+            ));
     }
     Ok(())
 }
@@ -373,7 +379,10 @@ fn test_examine_single_cpio() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-e").arg("tests/single.cpio");
 
-    cmd.output()?.assert_success().assert_stdout("0\tcpio\n");
+    cmd.output()?
+        .assert_stderr("")
+        .assert_success()
+        .assert_stdout("0\t512\t512\tcpio\t8\n");
     Ok(())
 }
 

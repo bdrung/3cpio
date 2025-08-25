@@ -30,10 +30,10 @@ Examine the content of the initramfs cpio on an Ubuntu 24.04 system:
 
 ```
 $ 3cpio --examine /boot/initrd.img
-0	cpio
-77312	cpio
-7286272	cpio
-85523968	zstd
+0	148480	148480	cpio	147350
+148480	13275136	13126656	cpio	13125632
+13275136	55215104	41939968	cpio	41692226
+55215104	61956920	6741816	zstd	15616306
 ```
 
 This initramfs cpio consists of three uncompressed cpio archives followed by a
@@ -118,8 +118,8 @@ $ cat manifest
 # This is a comment. Leaving the remaining files as task for the reader.
 $ 3cpio --create initrd.img < manifest
 $ 3cpio --examine initrd.img
-0	cpio
-101332	zstd
+0	101332	101332	cpio	100684
+101332	786226	684894	zstd	1446031
 $ 3cpio --list --verbose initrd.img
 drwxr-xr-x   2 root     root            0 Jul  4 20:42 kernel
 drwxr-xr-x   2 root     root            0 Jul  8 23:53 kernel/x86
