@@ -237,29 +237,10 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
             if header.filesize == 0 {
                 continue;
             }
-            match header.mode & MODE_FILETYPE_MASK {
-                FILETYPE_DIRECTORY | FILETYPE_SYMLINK => {
-                    header.skip_file_content(archive)?;
-                }
-                FILETYPE_REGULAR_FILE => write_file_content(archive, out, &header)?,
-                FILETYPE_CHARACTER_DEVICE
-                | FILETYPE_FIFO
-                | FILETYPE_BLOCK_DEVICE
-                | FILETYPE_SOCKET => {
-                    unimplemented!(
-                        "Mode {:o} (file {}) not implemented. Please open a bug report requesting support for this type.",
-                        header.mode, header.filename
-                    )
-                }
-                _ => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        format!(
-                            "Invalid/unknown filetype {:o}: {}",
-                            header.mode, header.filename
-                        ),
-                    ))
-                }
+            if matches!(header.mode & MODE_FILETYPE_MASK, FILETYPE_REGULAR_FILE) {
+                write_file_content(archive, out, &header)?;
+            } else {
+                header.skip_file_content(archive)?;
             }
         } else {
             match header.mode & MODE_FILETYPE_MASK {
