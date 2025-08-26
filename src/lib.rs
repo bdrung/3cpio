@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{prelude::*, Result};
 use std::num::NonZeroU32;
-use std::os::unix::fs::MetadataExt;
 use std::time::SystemTime;
 
 use glob::Pattern;
@@ -25,6 +24,7 @@ use crate::seek_forward::SeekForward;
 pub mod logger;
 
 mod compression;
+pub mod examine;
 mod extended_error;
 pub mod extract;
 mod filetype;
@@ -291,61 +291,6 @@ pub fn create_cpio_archive<W: Write>(
     let manifest = Manifest::from_input(buf_reader, logger)?;
     debug!(logger, "Writing cpio...")?;
     manifest.write_archive(archive, alignment, source_date_epoch, logger)
-}
-
-fn read_file_sizes<R: Read + SeekForward>(archive: &mut R) -> Result<u64> {
-    let mut file_sizes = 0;
-    loop {
-        let (filename, size) = read_file_name_and_size_from_next_cpio_object(archive)?;
-        file_sizes += u64::from(size);
-        if filename == TRAILER_FILENAME {
-            break;
-        }
-    }
-    Ok(file_sizes)
-}
-
-/// List the offsets of the cpio archives and their compression.
-///
-/// **Warning**: This function was designed for the `3cpio` command-line application.
-/// The API can change between releases and no stability promises are given.
-/// Please get in contact to support your use case and make the API for this function stable.
-pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<()> {
-    let mut end = archive.stream_position()?;
-    let mut magic_header = read_magic_header(&mut archive)?;
-    while let Some(compression) = magic_header {
-        let start = end;
-        let size = if compression.is_uncompressed() {
-            read_file_sizes(&mut archive)?
-        } else {
-            // Assume that the compressor command will read the file to the end.
-            let end = archive.metadata()?.size();
-            let mut decompressed = compression.decompress(archive)?;
-            let size = read_file_sizes(&mut decompressed)?;
-            writeln!(
-                out,
-                "{}\t{}\t{}\t{}\t{}",
-                start,
-                end,
-                end - start,
-                compression.command(),
-                size
-            )?;
-            break;
-        };
-        magic_header = read_magic_header(&mut archive)?;
-        end = archive.stream_position()?;
-        writeln!(
-            out,
-            "{}\t{}\t{}\t{}\t{}",
-            start,
-            end,
-            end - start,
-            compression.command(),
-            size
-        )?;
-    }
-    Ok(())
 }
 
 /// List the contents of the cpio archives.

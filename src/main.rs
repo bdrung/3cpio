@@ -11,12 +11,11 @@ use std::process::ExitCode;
 use glob::Pattern;
 use lexopt::prelude::*;
 
+use threecpio::examine::examine_cpio_content;
 use threecpio::extract::{extract_cpio_archive, ExtractOptions};
 use threecpio::logger::{Level, Logger};
 use threecpio::ranges::Ranges;
-use threecpio::{
-    create_cpio_archive, examine_cpio_content, get_cpio_archive_count, list_cpio_content,
-};
+use threecpio::{create_cpio_archive, get_cpio_archive_count, list_cpio_content};
 
 #[derive(Debug)]
 struct Args {
