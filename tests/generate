@@ -31,6 +31,11 @@ echo "This is a fake busybox binary to simulate a POSIX shell" > "$input/shell/u
 generate_cpio "${input}/shell" > "$input/shell.cpio"
 touch --date="@${SOURCE_DATE_EPOCH}" "$input/shell.cpio"
 
+mkdir -p "$input/bigdata"
+dd bs=1000 count=102500 if=/dev/zero of="$input/bigdata/zeros"
+generate_cpio "${input}/bigdata" > "$input/bigdata.cpio"
+touch --date="@${SOURCE_DATE_EPOCH}" "$input/bigdata.cpio"
+
 cp single.cpio bzip2.cpio
 bzip2 -9 < "$input/shell.cpio" >> bzip2.cpio
 
@@ -51,6 +56,9 @@ xz --check=crc32 --threads=1 -9 < "$input/shell.cpio" >> xz.cpio
 
 cp single.cpio zstd.cpio
 zstd -q -9 < "$input/shell.cpio" >> zstd.cpio
+
+cat single.cpio "$input/shell.cpio" > bigdata.cpio
+zstd -q -9 < "$input/bigdata.cpio" >> bigdata.cpio
 
 mkdir "$input/path-traversal"
 ln -s /tmp "$input/path-traversal/tmp"

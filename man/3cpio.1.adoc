@@ -17,7 +17,7 @@ Benjamin Drung
 *3cpio* {*-c*|*--create*} [*-v*|*--debug*] [*-C* _DIR_] [*--data-align* _ALIGNMENT_]
 [_ARCHIVE_] < _manifest_
 
-*3cpio* {*-e*|*--examine*} _ARCHIVE_
+*3cpio* {*-e*|*--examine*} [*--raw*] _ARCHIVE_
 
 *3cpio* {*-t*|*--list*} [*-v*|*--debug*] [*-P* _LIST_] _ARCHIVE_ [_pattern_...]
 
@@ -54,8 +54,11 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
   (to avoid leaking sensitive information).
 
 *-e*, *--examine* _ARCHIVE_::
-  List the offsets of the cpio archives and their compression.
-  Each line contains these five values tab-separated:
+  List the offsets of the cpio archives and their compression in a formatted table.
+  SI prefixes are used for the size unit (e. g. 1 kB = 1000 bytes).
+  Do not rely on the output to have a specific layout.
+  Use the *--raw* option for a machine-readable output.
+  Then each line will contain these five values tab-separated:
 
   Start::: The beginning of the cpio archive in bytes.
   End::: The end of the cpio archive in bytes.
@@ -133,6 +136,11 @@ file system (where _$path_ is the path the cpio archive will be written to):
   Set permissions of extracted files to those recorded in the archive (default
   for superuser). This option is only taken into account in the *--extract*
   mode.
+
+*--raw*::
+Use a machine-readable output format.
+This format is designed for easy parsing and is intended for being used in scripts.
+This option is only taken into account in the *--examine* mode.
 
 *-s* _NAME_, *--subdir*=_NAME_::
   Extract the cpio archives into separate sub-directories (using the given
@@ -273,6 +281,18 @@ Examine the content of the initramfs cpio on an Ubuntu 24.04 system:
 [example,shell]
 ----
 $ 3cpio --examine /boot/initrd.img
+Start     End       Size      Compr.   Extracted
+0 B       148 kB    148 kB    cpio     147 kB
+148 kB    13.3 MB   13.1 MB   cpio     13.1 MB
+13.3 MB   55.2 MB   41.9 MB   cpio     41.7 MB
+55.2 MB   62.0 MB   6.74 MB   zstd     15.6 MB
+----
+
+There is also a machine-readable output format available:
+
+[example,shell]
+----
+$ 3cpio --examine --raw /boot/initrd.img
 0	148480	148480	cpio	147350
 148480	13275136	13126656	cpio	13125632
 13275136	55215104	41939968	cpio	41692226
@@ -366,8 +386,9 @@ $ cat manifest
 # This is a comment. Leaving the remaining files as task for the reader.
 $ 3cpio --create initrd.img < manifest
 $ 3cpio --examine initrd.img
-0	101332	101332	cpio	100684
-101332	786226	684894	zstd	1446031
+Start     End       Size      Compr.   Extracted
+0 B       101 kB    101 kB    cpio     101 kB
+101 kB    786 kB    685 kB    zstd     1.45 MB
 $ 3cpio --list --verbose initrd.img
 drwxr-xr-x   2 root     root            0 Jul  4 20:42 kernel
 drwxr-xr-x   2 root     root            0 Jul  8 23:53 kernel/x86
@@ -377,7 +398,7 @@ drwxr-xr-x   2 root     root            0 Jun  5 14:11 .
 lrwxrwxrwx   1 root     root            7 Mar 20  2022 bin -> usr/bin
 drwxr-xr-x   2 root     root            0 Apr 20  2023 usr
 drwxr-xr-x   2 root     root            0 Jul  9 09:56 usr/bin
--rwxr-xr-x   1 root     root      1740896 Mar  5 03:35 usr/bin/bash
+-rwxr-xr-x   1 root     root      1446024 Mar 31  2024 usr/bin/bash
 ----
 
 == See also

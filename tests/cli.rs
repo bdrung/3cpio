@@ -317,14 +317,14 @@ fn test_count_unexpected_argument() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn test_examine_compressed_cpio() -> Result<(), Box<dyn Error>> {
+fn test_examine_compressed_cpio_raw() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzop", "xz", "zstd"] {
         if program_not_available(compression) {
             continue;
         }
         let path = format!("tests/{compression}.cpio");
         let mut cmd = get_command();
-        cmd.arg("-e").arg(&path);
+        cmd.arg("-e").arg(&path).arg("--raw");
         let size = symlink_metadata(&path)?.size();
 
         cmd.output()?
@@ -375,9 +375,9 @@ fn test_extract_make_directories_with_pattern() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn test_examine_single_cpio() -> Result<(), Box<dyn Error>> {
+fn test_examine_single_cpio_raw() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
-    cmd.arg("-e").arg("tests/single.cpio");
+    cmd.arg("-e").arg("--raw").arg("tests/single.cpio");
 
     cmd.output()?
         .assert_stderr("")

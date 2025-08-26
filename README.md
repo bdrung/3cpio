@@ -30,6 +30,17 @@ Examine the content of the initramfs cpio on an Ubuntu 24.04 system:
 
 ```
 $ 3cpio --examine /boot/initrd.img
+Start     End       Size      Compr.   Extracted
+0 B       148 kB    148 kB    cpio     147 kB
+148 kB    13.3 MB   13.1 MB   cpio     13.1 MB
+13.3 MB   55.2 MB   41.9 MB   cpio     41.7 MB
+55.2 MB   62.0 MB   6.74 MB   zstd     15.6 MB
+```
+
+There is also a machine-readable output format available:
+
+```
+$ 3cpio --examine --raw /boot/initrd.img
 0	148480	148480	cpio	147350
 148480	13275136	13126656	cpio	13125632
 13275136	55215104	41939968	cpio	41692226
@@ -118,8 +129,9 @@ $ cat manifest
 # This is a comment. Leaving the remaining files as task for the reader.
 $ 3cpio --create initrd.img < manifest
 $ 3cpio --examine initrd.img
-0	101332	101332	cpio	100684
-101332	786226	684894	zstd	1446031
+Start     End       Size      Compr.   Extracted
+0 B       101 kB    101 kB    cpio     101 kB
+101 kB    786 kB    685 kB    zstd     1.45 MB
 $ 3cpio --list --verbose initrd.img
 drwxr-xr-x   2 root     root            0 Jul  4 20:42 kernel
 drwxr-xr-x   2 root     root            0 Jul  8 23:53 kernel/x86
@@ -129,7 +141,7 @@ drwxr-xr-x   2 root     root            0 Jun  5 14:11 .
 lrwxrwxrwx   1 root     root            7 Mar 20  2022 bin -> usr/bin
 drwxr-xr-x   2 root     root            0 Apr 20  2023 usr
 drwxr-xr-x   2 root     root            0 Jul  9 09:56 usr/bin
--rwxr-xr-x   1 root     root      1740896 Mar  5 03:35 usr/bin/bash
+-rwxr-xr-x   1 root     root      1446024 Mar 31  2024 usr/bin/bash
 ```
 
 Benchmark results

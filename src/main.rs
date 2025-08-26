@@ -33,6 +33,7 @@ struct Args {
     parts: Option<Ranges>,
     patterns: Vec<Pattern>,
     preserve_permissions: bool,
+    raw: bool,
     subdir: Option<String>,
     to_stdout: bool,
 }
@@ -55,7 +56,7 @@ fn print_help() {
         "Usage:
     {executable} --count ARCHIVE
     {executable} {{-c|--create}} [-v|--debug] [-C DIR] [--data-align BYTES] [ARCHIVE] < manifest
-    {executable} {{-e|--examine}} ARCHIVE
+    {executable} {{-e|--examine}} [--raw] ARCHIVE
     {executable} {{-t|--list}} [-v|--debug] [-P LIST] ARCHIVE [pattern...]
     {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [--make-directories] [-P LIST] [-p] [-s NAME] [--to-stdout] [--force] ARCHIVE [pattern...]
 
@@ -72,6 +73,7 @@ Optional arguments:
   -p, --preserve-permissions
                  Set permissions of extracted files to those recorded in the
                  archive (default for superuser).
+  --raw          Use a machine-readable output format.
   -s, --subdir   Extract the cpio archives into separate directories (using the
                  given name plus an incrementing number)
   --to-stdout    Extract files to standard output
@@ -104,6 +106,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     let mut archive = None;
     let mut make_directories = false;
     let mut patterns = Vec::new();
+    let mut raw = false;
     let mut subdir: Option<String> = None;
     let mut to_stdout = false;
     let mut arguments = Vec::new();
@@ -151,6 +154,9 @@ fn parse_args() -> Result<Args, lexopt::Error> {
             }
             Short('p') | Long("preserve-permissions") => {
                 preserve_permissions = true;
+            }
+            Long("raw") => {
+                raw = true;
             }
             Short('s') | Long("subdir") => {
                 subdir = Some(parser.value()?.string()?);
@@ -223,6 +229,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         parts,
         patterns,
         preserve_permissions,
+        raw,
         subdir,
         to_stdout,
     })
@@ -350,7 +357,7 @@ fn main() -> ExitCode {
     } else if args.examine {
         (
             "examine content",
-            examine_cpio_content(archive, &mut stdout),
+            examine_cpio_content(archive, &mut stdout, args.raw),
         )
     } else if args.extract {
         (
