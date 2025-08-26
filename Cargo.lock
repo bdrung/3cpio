@@ -22,7 +22,7 @@ checksum = "6a82ae493e598baaea5209805c49bbf2ea7de956d50d7da0da1164f9c6d28543"
 
 [[package]]
 name = "threecpio"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "glob",
  "lexopt",

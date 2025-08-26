@@ -1,6 +1,20 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.11.0 (2025-08-26)
+-------------------
+
+### What's new
+
+* set `--stream-size` on `zstd` compressor command
+  ([issue #15](https://github.com/bdrung/3cpio/issues/15))
+* doc: document all public const/functions
+* introduce a `Logger` struct and macros and use an enum for log level
+* let `--examine` print the size and extracted size
+  ([issue #13](https://github.com/bdrung/3cpio/issues/13))
+* Add `--raw` option to `--examine` for the current format and make a
+  human readable format the default.
+
 0.10.2 (2025-08-13)
 -------------------
 
