@@ -9,6 +9,36 @@ use crate::compression::read_magic_header;
 use crate::header::{read_file_name_and_size_from_next_cpio_object, TRAILER_FILENAME};
 use crate::seek_forward::SeekForward;
 
+struct Examination<'a> {
+    start: u64,
+    end: u64,
+    compression: &'a str,
+    extracted_size: u64,
+}
+
+impl<'a> Examination<'a> {
+    fn new(start: u64, end: u64, compression: &'a str, extracted_size: u64) -> Self {
+        Examination {
+            start,
+            end,
+            compression,
+            extracted_size,
+        }
+    }
+
+    fn write<W: Write>(&self, out: &mut W) -> Result<()> {
+        writeln!(
+            out,
+            "{}\t{}\t{}\t{}\t{}",
+            self.start,
+            self.end,
+            self.end - self.start,
+            self.compression,
+            self.extracted_size,
+        )
+    }
+}
+
 /// List the offsets of the cpio archives and their compression.
 ///
 /// **Warning**: This function was designed for the `3cpio` command-line application.
@@ -26,28 +56,14 @@ pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<
             let end = archive.metadata()?.size();
             let mut decompressed = compression.decompress(archive)?;
             let size = read_file_sizes(&mut decompressed)?;
-            writeln!(
-                out,
-                "{}\t{}\t{}\t{}\t{}",
-                start,
-                end,
-                end - start,
-                compression.command(),
-                size
-            )?;
+            let examination = Examination::new(start, end, compression.command(), size);
+            examination.write(out)?;
             break;
         };
         magic_header = read_magic_header(&mut archive)?;
         end = archive.stream_position()?;
-        writeln!(
-            out,
-            "{}\t{}\t{}\t{}\t{}",
-            start,
-            end,
-            end - start,
-            compression.command(),
-            size
-        )?;
+        let examination = Examination::new(start, end, compression.command(), size);
+        examination.write(out)?;
     }
     Ok(())
 }
