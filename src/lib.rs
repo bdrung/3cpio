@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{prelude::*, Result};
 use std::num::NonZeroU32;
+use std::os::unix::fs::MetadataExt;
 use std::time::SystemTime;
 
 use glob::Pattern;
@@ -317,8 +318,20 @@ pub fn examine_cpio_content<W: Write>(mut archive: File, out: &mut W) -> Result<
         let size = if compression.is_uncompressed() {
             read_file_sizes(&mut archive)?
         } else {
-            let mut decompressed = compression.decompress(archive.try_clone()?)?;
-            read_file_sizes(&mut decompressed)?
+            // Assume that the compressor command will read the file to the end.
+            let end = archive.metadata()?.size();
+            let mut decompressed = compression.decompress(archive)?;
+            let size = read_file_sizes(&mut decompressed)?;
+            writeln!(
+                out,
+                "{}\t{}\t{}\t{}\t{}",
+                start,
+                end,
+                end - start,
+                compression.command(),
+                size
+            )?;
+            break;
         };
         magic_header = read_magic_header(&mut archive)?;
         end = archive.stream_position()?;
