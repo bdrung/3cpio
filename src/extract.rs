@@ -244,8 +244,11 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
             }
         } else {
             match header.mode & MODE_FILETYPE_MASK {
-                FILETYPE_CHARACTER_DEVICE => {
-                    write_character_device(&header, options.preserve_permissions, logger)?
+                FILETYPE_BLOCK_DEVICE
+                | FILETYPE_CHARACTER_DEVICE
+                | FILETYPE_FIFO
+                | FILETYPE_SOCKET => {
+                    write_special_file(&header, options.preserve_permissions, logger)?
                 }
                 FILETYPE_DIRECTORY => write_directory(
                     &header,
@@ -263,12 +266,6 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
                 FILETYPE_SYMLINK => {
                     write_symbolic_link(archive, &header, options.preserve_permissions, logger)?
                 }
-                FILETYPE_FIFO | FILETYPE_BLOCK_DEVICE | FILETYPE_SOCKET => {
-                    unimplemented!(
-                        "Mode {:o} (file {}) not implemented. Please open a bug report requesting support for this type.",
-                        header.mode, header.filename
-                    )
-                }
                 _ => {
                     return Err(Error::new(
                         ErrorKind::InvalidData,
@@ -285,7 +282,7 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
     Ok(())
 }
 
-fn write_character_device<W: Write>(
+fn write_special_file<W: Write>(
     header: &Header,
     preserve_permissions: bool,
     logger: &mut Logger<W>,
@@ -294,14 +291,17 @@ fn write_character_device<W: Write>(
         return Err(Error::new(
             ErrorKind::InvalidData,
             format!(
-                "Invalid size for character device '{}': {} bytes instead of 0.",
-                header.filename, header.filesize
+                "Invalid size for {} '{}': {} bytes instead of 0.",
+                header.file_type_name(),
+                header.filename,
+                header.filesize
             ),
         ));
     };
     debug!(
         logger,
-        "Creating character device '{}' with mode {:o}",
+        "Creating {} '{}' with mode {:o}",
+        header.file_type_name(),
         header.filename,
         header.mode_perm(),
     )?;
@@ -644,6 +644,41 @@ mod tests {
     }
 
     #[test]
+    fn test_read_cpio_and_extract_fifo() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let tempdir = TempDir::new_and_set_current_dir().unwrap();
+        let path = tempdir.path.join("fifo.cpio");
+        let uid = getuid();
+        let gid = getgid();
+        let header = Header::new(1, 0o010_600, uid, gid, 1, 1746789067, 0, 0, 0, "initctl");
+        let mut archive = File::create(&path).unwrap();
+        header.write(&mut archive).unwrap();
+        Header::trailer().write(&mut archive).unwrap();
+
+        let mut archive = File::open(&path).unwrap();
+        let mut logger = Logger::new_vec(Level::Info);
+        read_cpio_and_extract(
+            &mut archive,
+            &tempdir.path,
+            &mut None::<Stdout>,
+            &ExtractOptions::default(),
+            &mut logger,
+        )
+        .unwrap();
+
+        let attr = std::fs::metadata("initctl").unwrap();
+        assert_eq!(attr.len(), header.filesize.into());
+        assert!(attr.file_type().is_fifo());
+        assert_eq!(attr.modified().unwrap(), from_mtime(header.mtime));
+        assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
+        assert_eq!(attr.uid(), header.uid);
+        assert_eq!(attr.gid(), header.gid);
+        assert_eq!(major(attr.rdev()), header.rmajor);
+        assert_eq!(minor(attr.rdev()), header.rminor);
+        assert_eq!(logger.get_logs(), "initctl\n");
+    }
+
+    #[test]
     fn test_read_cpio_and_extract_invalid_file_type() {
         let tempdir = TempDir::new().unwrap();
         let path = tempdir.path.join("invalid.cpio");
@@ -720,7 +755,34 @@ mod tests {
     }
 
     #[test]
-    fn test_write_character_device() {
+    fn test_write_special_file_block_device() {
+        if getuid() != 0 {
+            // This test needs to run as root.
+            return;
+        }
+        let _lock = TEST_LOCK.lock().unwrap();
+        let _tempdir = TempDir::new_and_set_current_dir().unwrap();
+        let header = Header::new(1, 0o60_660, 0, 6, 1, 1751300235, 0, 7, 99, "loop99");
+        let mut logger = Logger::new_vec(Level::Debug);
+        write_special_file(&header, true, &mut logger).unwrap();
+
+        let attr = std::fs::metadata("loop99").unwrap();
+        assert_eq!(attr.len(), header.filesize.into());
+        assert!(attr.file_type().is_block_device());
+        assert_eq!(attr.modified().unwrap(), from_mtime(header.mtime));
+        assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
+        assert_eq!(attr.uid(), header.uid);
+        assert_eq!(attr.gid(), header.gid);
+        assert_eq!(major(attr.rdev()), header.rmajor);
+        assert_eq!(minor(attr.rdev()), header.rminor);
+        assert_eq!(
+            logger.get_logs(),
+            "Creating block device 'loop99' with mode 660\n"
+        );
+    }
+
+    #[test]
+    fn test_write_special_file_character_device() {
         let _lock = TEST_LOCK.lock().unwrap();
         if getuid() != 0 {
             // This test needs to run as root.
@@ -731,7 +793,7 @@ mod tests {
         header.rmajor = 1;
         header.rminor = 3;
         let mut logger = Logger::new_vec(Level::Debug);
-        write_character_device(&header, true, &mut logger).unwrap();
+        write_special_file(&header, true, &mut logger).unwrap();
 
         let attr = std::fs::metadata("null").unwrap();
         assert_eq!(attr.len(), header.filesize.into());
@@ -747,6 +809,53 @@ mod tests {
             "Creating character device './null' with mode 644\n"
         );
         std::fs::remove_file("null").unwrap();
+    }
+
+    #[test]
+    fn test_write_special_file_fifo() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let _tempdir = TempDir::new_and_set_current_dir().unwrap();
+        let uid = getuid();
+        let gid = getgid();
+        let header = Header::new(1, 0o010_600, uid, gid, 1, 1746789067, 0, 0, 0, "initctl");
+        let mut logger = Logger::new_vec(Level::Debug);
+        write_special_file(&header, false, &mut logger).unwrap();
+
+        let attr = std::fs::metadata("initctl").unwrap();
+        assert_eq!(attr.len(), header.filesize.into());
+        assert!(attr.file_type().is_fifo());
+        assert_eq!(attr.modified().unwrap(), from_mtime(header.mtime));
+        assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
+        assert_eq!(attr.uid(), header.uid);
+        assert_eq!(attr.gid(), header.gid);
+        assert_eq!(major(attr.rdev()), header.rmajor);
+        assert_eq!(minor(attr.rdev()), header.rminor);
+        assert_eq!(logger.get_logs(), "Creating fifo 'initctl' with mode 600\n");
+    }
+
+    #[test]
+    fn test_write_special_file_socket() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let _tempdir = TempDir::new_and_set_current_dir().unwrap();
+        let uid = getuid();
+        let gid = getgid();
+        let header = Header::new(1, 0o140_777, uid, gid, 1, 1746789058, 0, 0, 0, "notify");
+        let mut logger = Logger::new_vec(Level::Debug);
+        write_special_file(&header, true, &mut logger).unwrap();
+
+        let attr = std::fs::metadata("notify").unwrap();
+        assert_eq!(attr.len(), header.filesize.into());
+        assert!(attr.file_type().is_socket());
+        assert_eq!(attr.modified().unwrap(), from_mtime(header.mtime));
+        assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
+        assert_eq!(attr.uid(), header.uid);
+        assert_eq!(attr.gid(), header.gid);
+        assert_eq!(major(attr.rdev()), header.rmajor);
+        assert_eq!(minor(attr.rdev()), header.rminor);
+        assert_eq!(
+            logger.get_logs(),
+            "Creating socket 'notify' with mode 777\n"
+        );
     }
 
     #[test]
@@ -851,6 +960,7 @@ mod tests {
             0,
             "./dead_symlink",
         );
+        assert_eq!(header.file_type_name(), "symlink");
         let cpio = b"/nonexistent";
         let mut logger = Logger::new_vec(Level::Warning);
         write_symbolic_link(&mut cpio.as_ref(), &header, true, &mut logger).unwrap();

@@ -88,6 +88,19 @@ impl Header {
         (u64::from(self.major) << 32) | u64::from(self.minor)
     }
 
+    pub(crate) fn file_type_name(&self) -> &str {
+        match self.mode & MODE_FILETYPE_MASK {
+            FILETYPE_FIFO => "fifo",
+            FILETYPE_CHARACTER_DEVICE => "character device",
+            FILETYPE_DIRECTORY => "directory",
+            FILETYPE_BLOCK_DEVICE => "block device",
+            FILETYPE_REGULAR_FILE => "regular file",
+            FILETYPE_SYMLINK => "symlink",
+            FILETYPE_SOCKET => "socket",
+            _ => "invalid/unknown file type",
+        }
+    }
+
     pub(crate) fn is_root_directory(&self) -> bool {
         self.filename == "." && self.mode & MODE_FILETYPE_MASK == FILETYPE_DIRECTORY
     }
@@ -390,6 +403,7 @@ mod tests {
                 filename: "path/file".into()
             }
         );
+        assert_eq!(header.file_type_name(), "regular file");
 
         // Test writing the header and get the original data back
         let mut output = Vec::new();
@@ -427,6 +441,7 @@ mod tests {
                 filename: "invalid".into()
             }
         );
+        assert_eq!(header.file_type_name(), "invalid/unknown file type");
         assert_eq!(
             std::str::from_utf8(&header.mode_string()).unwrap(),
             "?rwSr-S-wT"
@@ -549,6 +564,7 @@ mod tests {
     fn test_is_root_directory() {
         let header = Header::new(0, 0o040_755, 0, 0, 1, 1744150584, 0, 0, 0, ".");
         assert!(header.is_root_directory());
+        assert_eq!(header.file_type_name(), "directory");
     }
 
     #[test]
