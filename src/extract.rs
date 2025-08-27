@@ -783,15 +783,13 @@ mod tests {
 
     #[test]
     fn test_write_special_file_character_device() {
-        let _lock = TEST_LOCK.lock().unwrap();
         if getuid() != 0 {
             // This test needs to run as root.
             return;
         }
+        let _lock = TEST_LOCK.lock().unwrap();
         let _tempdir = TempDir::new_and_set_current_dir().unwrap();
-        let mut header = Header::new(1, 0o20_644, 0, 0, 0, 1740402179, 0, 0, 0, "./null");
-        header.rmajor = 1;
-        header.rminor = 3;
+        let header = Header::new(1, 0o20_644, 0, 0, 0, 1740402179, 0, 1, 3, "./null");
         let mut logger = Logger::new_vec(Level::Debug);
         write_special_file(&header, true, &mut logger).unwrap();
 
