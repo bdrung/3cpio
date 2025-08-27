@@ -404,6 +404,36 @@ mod tests {
     }
 
     #[test]
+    fn test_header_read_invalid_file_type() {
+        // Wrapped before mtime and filename
+        let archive = b"070701000000010003FFA200000007000000420000000168AEBD2C\
+            00000000000000000000000000000000000000000000000800000000\
+            invalid\0\0\0";
+        let header = Header::read(&mut archive.as_ref()).unwrap();
+        assert_eq!(
+            header,
+            Header {
+                ino: 1,
+                mode: 0o777642,
+                uid: 7,
+                gid: 0x42,
+                nlink: 1,
+                mtime: 0x68AEBD2C,
+                filesize: 0,
+                major: 0,
+                minor: 0,
+                rmajor: 0,
+                rminor: 0,
+                filename: "invalid".into()
+            }
+        );
+        assert_eq!(
+            std::str::from_utf8(&header.mode_string()).unwrap(),
+            "?rwSr-S-wT"
+        );
+    }
+
+    #[test]
     fn test_header_read_invalid_magic_number() {
         let invalid_data = b"abc\tefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\
             abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
