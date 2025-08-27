@@ -962,7 +962,7 @@ mod tests {
         );
         assert_eq!(header.file_type_name(), "symlink");
         let cpio = b"/nonexistent";
-        let mut logger = Logger::new_vec(Level::Warning);
+        let mut logger = Logger::new_vec(Level::Debug);
         write_symbolic_link(&mut cpio.as_ref(), &header, true, &mut logger).unwrap();
 
         let attr = std::fs::symlink_metadata("dead_symlink").unwrap();
@@ -972,7 +972,10 @@ mod tests {
         assert_eq!(attr.permissions(), PermissionsExt::from_mode(header.mode));
         assert_eq!(attr.uid(), header.uid);
         assert_eq!(attr.gid(), header.gid);
-        assert_eq!(logger.get_logs(), "");
+        assert_eq!(
+            logger.get_logs(),
+            "Creating symlink './dead_symlink' -> '/nonexistent' with mode 777\n"
+        );
         std::fs::remove_file("dead_symlink").unwrap();
     }
 }
