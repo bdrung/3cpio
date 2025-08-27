@@ -273,7 +273,7 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
                     return Err(Error::new(
                         ErrorKind::InvalidData,
                         format!(
-                            "Invalid/unknown filetype {:o}: {}",
+                            "Invalid/unknown file type 0o{:o} for '{}'",
                             header.mode, header.filename
                         ),
                     ))
@@ -641,6 +641,41 @@ mod tests {
         let path = tempdir.path.join("cpio1/path/file");
         assert!(path.exists());
         assert_eq!(logger.get_logs(), ".\npath\npath/file\n");
+    }
+
+    #[test]
+    fn test_read_cpio_and_extract_invalid_file_type() {
+        let tempdir = TempDir::new().unwrap();
+        let path = tempdir.path.join("invalid.cpio");
+        let mut archive = File::create(&path).unwrap();
+        archive
+            .write_all(
+                b"070701000000010003FFA200000007000000070000000168AEBD2C\
+                00000000000000000000000000000000000000000000000800000000\
+                invalid\0\0\0\
+                070701000000000000000000000000000000000000000100000000\
+                00000000000000000000000000000000000000000000000B00000000\
+                TRAILER!!!\0\0\0\0",
+            )
+            .unwrap();
+        let mut archive = File::open(&path).unwrap();
+        let mut logger = Logger::new_vec(Level::Warning);
+        let got = read_cpio_and_extract(
+            &mut archive,
+            &tempdir.path,
+            &mut None::<Stdout>,
+            &ExtractOptions::default(),
+            &mut logger,
+        )
+        .unwrap_err();
+
+        assert_eq!(got.kind(), ErrorKind::InvalidData);
+        assert_eq!(
+            got.to_string(),
+            "Invalid/unknown file type 0o777642 for 'invalid'",
+        );
+        assert_eq!(logger.get_logs(), "");
+        assert!(!Path::new("invalid").exists());
     }
 
     // Test detecting path traversal attacks like CVE-2015-1197
