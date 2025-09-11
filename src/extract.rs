@@ -188,6 +188,46 @@ fn from_mtime(mtime: u32) -> SystemTime {
     std::time::UNIX_EPOCH + std::time::Duration::from_secs(mtime.into())
 }
 
+fn extract_to_disk<R: Read + SeekForward, W: Write>(
+    archive: &mut R,
+    header: &Header,
+    extractor: &mut Extractor,
+    options: &ExtractOptions,
+    logger: &mut Logger<W>,
+) -> Result<()> {
+    match header.mode & MODE_FILETYPE_MASK {
+        FILETYPE_BLOCK_DEVICE | FILETYPE_CHARACTER_DEVICE | FILETYPE_FIFO | FILETYPE_SOCKET => {
+            write_special_file(header, options.preserve_permissions, logger)?
+        }
+        FILETYPE_DIRECTORY => write_directory(
+            header,
+            options.preserve_permissions,
+            logger,
+            &mut extractor.mtimes,
+        )?,
+        FILETYPE_REGULAR_FILE => write_file(
+            archive,
+            header,
+            options.preserve_permissions,
+            &mut extractor.seen_files,
+            logger,
+        )?,
+        FILETYPE_SYMLINK => {
+            write_symbolic_link(archive, header, options.preserve_permissions, logger)?
+        }
+        _ => {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "Invalid/unknown file type 0o{:o} for '{}'",
+                    header.mode, header.filename
+                ),
+            ))
+        }
+    }
+    Ok(())
+}
+
 fn extract_to_writable<R, W>(archive: &mut R, header: &Header, out: &mut W) -> Result<()>
 where
     R: Read + SeekForward,
@@ -252,39 +292,7 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
         if let Some(out) = out {
             extract_to_writable(archive, &header, out)?;
         } else {
-            match header.mode & MODE_FILETYPE_MASK {
-                FILETYPE_BLOCK_DEVICE
-                | FILETYPE_CHARACTER_DEVICE
-                | FILETYPE_FIFO
-                | FILETYPE_SOCKET => {
-                    write_special_file(&header, options.preserve_permissions, logger)?
-                }
-                FILETYPE_DIRECTORY => write_directory(
-                    &header,
-                    options.preserve_permissions,
-                    logger,
-                    &mut extractor.mtimes,
-                )?,
-                FILETYPE_REGULAR_FILE => write_file(
-                    archive,
-                    &header,
-                    options.preserve_permissions,
-                    &mut extractor.seen_files,
-                    logger,
-                )?,
-                FILETYPE_SYMLINK => {
-                    write_symbolic_link(archive, &header, options.preserve_permissions, logger)?
-                }
-                _ => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        format!(
-                            "Invalid/unknown file type 0o{:o} for '{}'",
-                            header.mode, header.filename
-                        ),
-                    ))
-                }
-            }
+            extract_to_disk(archive, &header, &mut extractor, options, logger)?;
         };
     }
     extractor.set_modified_times(logger)?;
