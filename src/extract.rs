@@ -188,6 +188,22 @@ fn from_mtime(mtime: u32) -> SystemTime {
     std::time::UNIX_EPOCH + std::time::Duration::from_secs(mtime.into())
 }
 
+fn extract_to_writable<R, W>(archive: &mut R, header: &Header, out: &mut W) -> Result<()>
+where
+    R: Read + SeekForward,
+    W: Write,
+{
+    if header.filesize == 0 {
+        return Ok(());
+    }
+    if matches!(header.mode & MODE_FILETYPE_MASK, FILETYPE_REGULAR_FILE) {
+        write_file_content(archive, out, header)?;
+    } else {
+        header.skip_file_content(archive)?;
+    }
+    Ok(())
+}
+
 fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
     archive: &mut R,
     base_dir: &PathBuf,
@@ -234,14 +250,7 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
         }
 
         if let Some(out) = out {
-            if header.filesize == 0 {
-                continue;
-            }
-            if matches!(header.mode & MODE_FILETYPE_MASK, FILETYPE_REGULAR_FILE) {
-                write_file_content(archive, out, &header)?;
-            } else {
-                header.skip_file_content(archive)?;
-            }
+            extract_to_writable(archive, &header, out)?;
         } else {
             match header.mode & MODE_FILETYPE_MASK {
                 FILETYPE_BLOCK_DEVICE
