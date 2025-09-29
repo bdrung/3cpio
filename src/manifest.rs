@@ -1136,6 +1136,7 @@ mod tests {
             // This test expects a block device like /dev/loop0 being present.
             Err(_) => return,
         };
+        let mode = (stat.mode() & MODE_PERMISSION_MASK).try_into().unwrap();
         let mtime = stat.mtime().try_into().unwrap();
         let mut hardlinks = HashMap::new();
         let (file, umask) = File::from_line(line, &mut hardlinks).unwrap();
@@ -1147,9 +1148,9 @@ mod tests {
                     minor: minor(stat.rdev()),
                 },
                 "dev/loop0",
-                0o660,
+                mode,
                 0,
-                6,
+                stat.gid(),
                 mtime,
             )
         );
