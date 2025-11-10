@@ -1,6 +1,26 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.12.0 (2025-11-11)
+-------------------
+
+### What's new
+
+* skip special files (like block devices, character devices, fifos, and sockets)
+  when extracting to stdout
+* improve error message for invalid file type
+* support extracting all types of special files (block devices, fifos, and
+  sockets)
+* test: Support running the 3cpio cli tests against the installed 3cpio binary
+  by setting the environment variable `THREECPIO_BIN`.
+
+### Fixed
+
+* Remove executable permissions from the LICENSE file
+  ([issue #30](https://github.com/bdrung/3cpio/issues/30))
+* test: do not hard-code expected mode and gid in block device test
+  ([issue #28](https://github.com/bdrung/3cpio/issues/28))
+
 0.11.0 (2025-08-26)
 -------------------
 
