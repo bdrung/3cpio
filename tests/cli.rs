@@ -22,6 +22,10 @@ fn get_target_dir() -> std::path::PathBuf {
 }
 
 fn get_command() -> Command {
+    if let Ok(path) = std::env::var("THREECPIO_BIN") {
+        return Command::new(path);
+    }
+
     let mut program = get_target_dir();
     program.push("3cpio");
     Command::new(program)
