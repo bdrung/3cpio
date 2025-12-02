@@ -74,7 +74,9 @@ impl UserGroupCache {
         match self.user_cache.get(&uid) {
             Some(name) => Ok(name.clone()),
             None => {
-                let name = libc::getpwuid_name(uid)?;
+                let name = libc::getpwuid_name(uid).map_err(|e| {
+                    std::io::Error::new(e.kind(), format!("Get name for user ID {uid} failed: {e}"))
+                })?;
                 self.user_cache.insert(uid, name.clone());
                 Ok(name)
             }
@@ -86,7 +88,12 @@ impl UserGroupCache {
         match self.group_cache.get(&gid) {
             Some(name) => Ok(name.clone()),
             None => {
-                let name = libc::getgrgid_name(gid)?;
+                let name = libc::getgrgid_name(gid).map_err(|e| {
+                    std::io::Error::new(
+                        e.kind(),
+                        format!("Get name for group ID {gid} failed: {e}"),
+                    )
+                })?;
                 self.group_cache.insert(gid, name.clone());
                 Ok(name)
             }
