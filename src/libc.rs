@@ -142,11 +142,8 @@ pub(crate) fn strftime_local(format: &[u8], timestamp: u32) -> Result<String> {
 pub(crate) mod tests {
     use super::*;
     use crate::temp_dir::TempDir;
+    use crate::tests::set_timezone_to_utc;
     use std::time::{Duration, SystemTime};
-
-    extern "C" {
-        fn tzset();
-    }
 
     #[test]
     fn test_getpwuid_name_root() {
@@ -203,8 +200,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_strftime_local_hour() {
-        std::env::set_var("TZ", "UTC");
-        unsafe { tzset() };
+        set_timezone_to_utc();
         let time = strftime_local(b"%b %e %H:%M\0", 1720735264).unwrap();
         assert_eq!(time, "Jul 11 22:01");
     }

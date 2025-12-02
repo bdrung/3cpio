@@ -377,6 +377,13 @@ mod tests {
     // Lock for tests that rely on / change the current directory
     pub(crate) static TEST_LOCK: std::sync::Mutex<u32> = std::sync::Mutex::new(0);
 
+    pub(crate) fn set_timezone_to_utc() {
+        unsafe {
+            env::set_var("TZ", "UTC");
+            tzset();
+        }
+    }
+
     pub(crate) fn tests_path<P: AsRef<Path>>(path: P) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
@@ -457,8 +464,7 @@ mod tests {
         TRAILER!!!\0\0\0\0";
         let mut output = Vec::new();
         let mut user_group_cache = UserGroupCache::new();
-        env::set_var("TZ", "UTC");
-        unsafe { tzset() };
+        set_timezone_to_utc();
         read_cpio_and_print_long_format(
             &mut archive.as_ref(),
             &mut output,
@@ -486,8 +492,7 @@ mod tests {
         let mut output = Vec::new();
         let mut user_group_cache = UserGroupCache::new();
         user_group_cache.insert_test_data();
-        env::set_var("TZ", "UTC");
-        unsafe { tzset() };
+        set_timezone_to_utc();
         read_cpio_and_print_long_format(
             &mut archive.as_ref(),
             &mut output,
@@ -516,8 +521,7 @@ mod tests {
         let mut output = Vec::new();
         let mut user_group_cache = UserGroupCache::new();
         user_group_cache.insert_test_data();
-        env::set_var("TZ", "UTC");
-        unsafe { tzset() };
+        set_timezone_to_utc();
         read_cpio_and_print_long_format(
             &mut archive.as_ref(),
             &mut output,
@@ -549,8 +553,7 @@ mod tests {
         let mut output = Vec::new();
         let mut user_group_cache = UserGroupCache::new();
         user_group_cache.insert_test_data();
-        env::set_var("TZ", "UTC");
-        unsafe { tzset() };
+        set_timezone_to_utc();
         read_cpio_and_print_long_format(
             &mut archive.as_ref(),
             &mut output,
@@ -605,8 +608,7 @@ mod tests {
         let mut output = Vec::new();
         let mut user_group_cache = UserGroupCache::new();
         user_group_cache.insert_test_data();
-        env::set_var("TZ", "UTC");
-        unsafe { tzset() };
+        set_timezone_to_utc();
         read_cpio_and_print_long_format(
             &mut archive.as_ref(),
             &mut output,
