@@ -25,6 +25,16 @@ use crate::{filename_matches, seek_to_cpio_end, TRAILER_FILENAME};
 // TODO: Document hardlink structure
 pub(crate) type SeenFiles = HashMap<u128, String>;
 
+/// Extraction target (either an absolute directory or a `Write` trait like stdout).
+///
+/// **Warning**: This struct was designed for the `extract_cpio_archive` function.
+/// The API can change between releases and no stability promises are given.
+/// Please get in contact to support your use case and make the API for this function stable.
+pub enum ExtractTarget<'a, W: Write> {
+    Directory(PathBuf),
+    WritableStream(&'a mut W),
+}
+
 /// Options for extracting cpio archives.
 ///
 /// **Warning**: This struct was designed for the `extract_cpio_archive` function.
@@ -148,12 +158,11 @@ fn create_dir_ignore_existing<P: AsRef<std::path::Path>>(path: P) -> Result<()> 
 /// Please get in contact to support your use case and make the API for this function stable.
 pub fn extract_cpio_archive<W: Write, LW: Write>(
     mut archive: File,
-    mut out: Option<&mut W>,
+    mut target: ExtractTarget<W>,
     options: &ExtractOptions,
     logger: &mut Logger<LW>,
 ) -> Result<()> {
     let mut count = 0;
-    let base_dir = std::env::current_dir()?;
     loop {
         count += 1;
         let compression = match read_magic_header(&mut archive)? {
@@ -167,16 +176,22 @@ pub fn extract_cpio_archive<W: Write, LW: Write>(
             }
             break;
         }
-        let mut dir = base_dir.clone();
-        if let Some(ref s) = options.subdir {
-            dir.push(format!("{s}{count}"));
-            create_dir_ignore_existing(&dir)?;
-        }
+        let part_target = match target {
+            ExtractTarget::Directory(ref base_dir) => {
+                let mut dir = base_dir.clone();
+                if let Some(ref s) = options.subdir {
+                    dir.push(format!("{s}{count}"));
+                    create_dir_ignore_existing(&dir)?;
+                }
+                ExtractTarget::Directory(dir)
+            }
+            ExtractTarget::WritableStream(ref mut w) => ExtractTarget::WritableStream(w),
+        };
         if compression.is_uncompressed() {
-            read_cpio_and_extract(&mut archive, &dir, &mut out, options, logger)?;
+            read_cpio_and_extract(&mut archive, part_target, options, logger)?;
         } else {
             let mut decompressed = compression.decompress(archive)?;
-            read_cpio_and_extract(&mut decompressed, &dir, &mut out, options, logger)?;
+            read_cpio_and_extract(&mut decompressed, part_target, options, logger)?;
             break;
         }
     }
@@ -245,14 +260,13 @@ where
 
 fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
     archive: &mut R,
-    base_dir: &PathBuf,
-    out: &mut Option<W>,
+    mut target: ExtractTarget<W>,
     options: &ExtractOptions,
     logger: &mut Logger<LW>,
 ) -> Result<()> {
     let mut extractor = Extractor::new();
     let mut previous_checked_dir = PathBuf::new();
-    if out.is_none() {
+    if let ExtractTarget::Directory(ref base_dir) = target {
         std::env::set_current_dir(base_dir)?;
     }
     loop {
@@ -276,8 +290,8 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
 
         info!(logger, "{}", header.filename)?;
 
-        match out {
-            None => {
+        match target {
+            ExtractTarget::Directory(ref base_dir) => {
                 if !header.is_root_directory() {
                     // TODO: use dirfd once stable: https://github.com/rust-lang/rust/issues/120426
                     let absdir = absolute_parent_directory(&header.filename, base_dir)?;
@@ -294,7 +308,9 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
                 }
                 extract_to_disk(archive, &header, &mut extractor, options, logger)?;
             }
-            Some(out) => extract_to_writable(archive, &header, out)?,
+            ExtractTarget::WritableStream(ref mut out) => {
+                extract_to_writable(archive, &header, out)?
+            }
         }
     }
     extractor.set_modified_times(logger)?;
@@ -549,7 +565,13 @@ mod tests {
         let options = ExtractOptions::new(true, None, patterns, false, None);
         let mut logger = Logger::new_vec(Level::Info);
 
-        extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
+        extract_cpio_archive(
+            archive,
+            ExtractTarget::Directory::<Stdout>(std::env::current_dir().unwrap()),
+            &options,
+            &mut logger,
+        )
+        .unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(tempdir.path.join("path/file").exists());
         assert!(!tempdir.path.join("usr").exists());
@@ -568,7 +590,13 @@ mod tests {
             None,
         );
         let mut logger = Logger::new_vec(Level::Info);
-        extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
+        extract_cpio_archive(
+            archive,
+            ExtractTarget::WritableStream(&mut output),
+            &options,
+            &mut logger,
+        )
+        .unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "content\n");
         assert_eq!(logger.get_logs(), ".\npath\npath/file\n");
     }
@@ -579,7 +607,13 @@ mod tests {
         let mut output = Vec::new();
         let options = ExtractOptions::default();
         let mut logger = Logger::new_vec(Level::Warning);
-        extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
+        extract_cpio_archive(
+            archive,
+            ExtractTarget::WritableStream(&mut output),
+            &options,
+            &mut logger,
+        )
+        .unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             "content\nThis is a fake busybox binary to simulate a POSIX shell\n"
@@ -595,7 +629,13 @@ mod tests {
         let patterns = vec![Pattern::new("p?th").unwrap()];
         let options = ExtractOptions::new(false, None, patterns, false, None);
         let mut logger = Logger::new_vec(Level::Debug);
-        extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
+        extract_cpio_archive(
+            archive,
+            ExtractTarget::Directory::<Stdout>(std::env::current_dir().unwrap()),
+            &options,
+            &mut logger,
+        )
+        .unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
         assert_eq!(
@@ -627,7 +667,13 @@ mod tests {
         let mut output = Vec::new();
         let options = ExtractOptions::new(false, None, patterns, false, None);
         let mut logger = Logger::new_vec(Level::Info);
-        extract_cpio_archive(archive, Some(&mut output), &options, &mut logger).unwrap();
+        extract_cpio_archive(
+            archive,
+            ExtractTarget::WritableStream(&mut output),
+            &options,
+            &mut logger,
+        )
+        .unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             "This is a fake busybox binary to simulate a POSIX shell\n"
@@ -643,7 +689,13 @@ mod tests {
         let patterns = vec![Pattern::new("path").unwrap()];
         let options = ExtractOptions::new(false, None, patterns, false, None);
         let mut logger = Logger::new_vec(Level::Info);
-        extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
+        extract_cpio_archive(
+            archive,
+            ExtractTarget::Directory::<Stdout>(std::env::current_dir().unwrap()),
+            &options,
+            &mut logger,
+        )
+        .unwrap();
         assert!(tempdir.path.join("path").is_dir());
         assert!(!tempdir.path.join("path/file").exists());
         assert_eq!(logger.get_logs(), "path\n");
@@ -656,7 +708,13 @@ mod tests {
         let tempdir = TempDir::new_and_set_current_dir().unwrap();
         let options = ExtractOptions::new(false, None, Vec::new(), false, Some("cpio".into()));
         let mut logger = Logger::new_vec(Level::Info);
-        extract_cpio_archive(archive, None::<&mut Stdout>, &options, &mut logger).unwrap();
+        extract_cpio_archive(
+            archive,
+            ExtractTarget::Directory::<Stdout>(std::env::current_dir().unwrap()),
+            &options,
+            &mut logger,
+        )
+        .unwrap();
         let path = tempdir.path.join("cpio1/path/file");
         assert!(path.exists());
         assert_eq!(logger.get_logs(), ".\npath\npath/file\n");
@@ -678,8 +736,7 @@ mod tests {
         let mut logger = Logger::new_vec(Level::Info);
         read_cpio_and_extract(
             &mut archive,
-            &tempdir.path,
-            &mut None::<Stdout>,
+            ExtractTarget::Directory::<Stdout>(tempdir.path.clone()),
             &ExtractOptions::default(),
             &mut logger,
         )
@@ -718,8 +775,7 @@ mod tests {
         let mut logger = Logger::new_vec(Level::Warning);
         let got = read_cpio_and_extract(
             &mut archive,
-            &tempdir.path,
-            &mut None::<Stdout>,
+            ExtractTarget::Directory::<Stdout>(tempdir.path.clone()),
             &ExtractOptions::default(),
             &mut logger,
         )
@@ -744,8 +800,7 @@ mod tests {
         let mut logger = Logger::new_vec(Level::Info);
         let got = read_cpio_and_extract(
             &mut archive,
-            &tempdir.path,
-            &mut None::<Stdout>,
+            ExtractTarget::Directory::<Stdout>(tempdir.path.clone()),
             &ExtractOptions::default(),
             &mut logger,
         )
@@ -761,13 +816,11 @@ mod tests {
     #[test]
     fn test_read_cpio_and_extract_path_traversal_to_stdout() {
         let mut archive = File::open(tests_path("path-traversal.cpio")).unwrap();
-        let base_dir = std::env::current_dir().unwrap();
         let mut output = Vec::new();
         let mut logger = Logger::new_vec(Level::Info);
         read_cpio_and_extract(
             &mut archive,
-            &base_dir,
-            &mut Some(&mut output),
+            ExtractTarget::WritableStream(&mut output),
             &ExtractOptions::default(),
             &mut logger,
         )

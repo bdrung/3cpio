@@ -12,7 +12,7 @@ use glob::Pattern;
 use lexopt::prelude::*;
 
 use threecpio::examine::examine_cpio_content;
-use threecpio::extract::{extract_cpio_archive, ExtractOptions};
+use threecpio::extract::{extract_cpio_archive, ExtractOptions, ExtractTarget};
 use threecpio::logger::{Level, Logger};
 use threecpio::ranges::Ranges;
 use threecpio::{create_cpio_archive, get_cpio_archive_count, list_cpio_content};
@@ -348,6 +348,13 @@ fn main() -> ExitCode {
         }
     }
 
+    let cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(e) => {
+            eprintln!("{executable}: Error: Failed to determine current directory: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut stdout = std::io::stdout();
     let (operation, result) = if args.count {
         (
@@ -364,7 +371,11 @@ fn main() -> ExitCode {
             "extract content",
             extract_cpio_archive(
                 archive,
-                args.to_stdout.then_some(&mut stdout),
+                if args.to_stdout {
+                    ExtractTarget::WritableStream(&mut stdout)
+                } else {
+                    ExtractTarget::Directory(cwd)
+                },
                 &args.extract_options(),
                 &mut logger,
             ),
