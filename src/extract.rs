@@ -171,7 +171,6 @@ pub fn extract_cpio_archive<W: Write, LW: Write>(
         if let Some(ref s) = options.subdir {
             dir.push(format!("{s}{count}"));
             create_dir_ignore_existing(&dir)?;
-            std::env::set_current_dir(&dir)?;
         }
         if compression.is_uncompressed() {
             read_cpio_and_extract(&mut archive, &dir, &mut out, options, logger)?;
@@ -253,6 +252,9 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
 ) -> Result<()> {
     let mut extractor = Extractor::new();
     let mut previous_checked_dir = PathBuf::new();
+    if out.is_none() {
+        std::env::set_current_dir(base_dir)?;
+    }
     loop {
         let header = match Header::read(archive) {
             Ok(header) => {
@@ -697,7 +699,9 @@ mod tests {
 
     #[test]
     fn test_read_cpio_and_extract_invalid_file_type() {
+        let _lock = TEST_LOCK.lock().unwrap();
         let tempdir = TempDir::new().unwrap();
+        let cwd = std::env::current_dir().unwrap();
         let path = tempdir.path.join("invalid.cpio");
         let mut archive = File::create(&path).unwrap();
         archive
@@ -720,6 +724,7 @@ mod tests {
             &mut logger,
         )
         .unwrap_err();
+        std::env::set_current_dir(&cwd).unwrap();
 
         assert_eq!(got.kind(), ErrorKind::InvalidData);
         assert_eq!(
