@@ -276,26 +276,26 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
 
         info!(logger, "{}", header.filename)?;
 
-        if out.is_none() && !header.is_root_directory() {
-            // TODO: use dirfd once stable: https://github.com/rust-lang/rust/issues/120426
-            let absdir = absolute_parent_directory(&header.filename, base_dir)?;
-            // canonicalize() is an expensive call. So cache the previously resolved
-            // parent directory. Skip the path traversal check in case the absolute
-            // parent directory has no symlinks and matches the previouly checked directory.
-            if absdir != previous_checked_dir {
-                if options.make_directories {
-                    create_dir_all(&absdir)?;
+        match out {
+            None => {
+                if !header.is_root_directory() {
+                    // TODO: use dirfd once stable: https://github.com/rust-lang/rust/issues/120426
+                    let absdir = absolute_parent_directory(&header.filename, base_dir)?;
+                    // canonicalize() is an expensive call. So cache the previously resolved
+                    // parent directory. Skip the path traversal check in case the absolute
+                    // parent directory has no symlinks and matches the previouly checked directory.
+                    if absdir != previous_checked_dir {
+                        if options.make_directories {
+                            create_dir_all(&absdir)?;
+                        }
+                        previous_checked_dir =
+                            check_path_is_canonical_subdir(&header.filename, &absdir, base_dir)?;
+                    }
                 }
-                previous_checked_dir =
-                    check_path_is_canonical_subdir(&header.filename, &absdir, base_dir)?;
+                extract_to_disk(archive, &header, &mut extractor, options, logger)?;
             }
+            Some(out) => extract_to_writable(archive, &header, out)?,
         }
-
-        if let Some(out) = out {
-            extract_to_writable(archive, &header, out)?;
-        } else {
-            extract_to_disk(archive, &header, &mut extractor, options, logger)?;
-        };
     }
     extractor.set_modified_times(logger)?;
     Ok(())
