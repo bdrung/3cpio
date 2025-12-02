@@ -8,26 +8,34 @@ use std::io::{Error, Result};
 /// broken-out fields of the record in the password database (e.g., the local
 /// password file /etc/passwd, NIS, and LDAP) that matches the user ID uid.
 pub(crate) fn getpwuid_name(uid: u32) -> Result<Option<String>> {
+    let mut bufsize: usize = 1024;
     let mut pwd = std::mem::MaybeUninit::<libc::passwd>::uninit();
-    let mut buf = [0u8; 2048];
     let mut result = std::ptr::null_mut::<libc::passwd>();
-    let rc = unsafe {
-        libc::getpwuid_r(
-            uid,
-            pwd.as_mut_ptr(),
-            buf.as_mut_ptr() as *mut libc::c_char,
-            buf.len(),
-            &mut result,
-        )
-    };
-    if rc != 0 {
-        return Err(Error::last_os_error());
+    loop {
+        let mut buf = vec![0u8; bufsize];
+        let rc = unsafe {
+            libc::getpwuid_r(
+                uid,
+                pwd.as_mut_ptr(),
+                buf.as_mut_ptr() as *mut libc::c_char,
+                buf.len(),
+                &mut result,
+            )
+        };
+        if rc == libc::ERANGE {
+            // Buffer too small
+            bufsize *= 2;
+            continue;
+        }
+        if rc != 0 {
+            return Err(Error::last_os_error());
+        }
+        if result.is_null() {
+            return Ok(None);
+        }
+        let name = unsafe { core::ffi::CStr::from_ptr((*result).pw_name) };
+        return Ok(Some(name.to_string_lossy().to_string()));
     }
-    if result.is_null() {
-        return Ok(None);
-    }
-    let name = unsafe { core::ffi::CStr::from_ptr((*result).pw_name) };
-    Ok(Some(name.to_string_lossy().to_string()))
 }
 
 /// Get group file entry and return group name.
@@ -37,26 +45,34 @@ pub(crate) fn getpwuid_name(uid: u32) -> Result<Option<String>> {
 /// broken-out fields of the record in the group database (e.g., the local
 /// group file /etc/group, NIS, and LDAP) that matches the group ID gid.
 pub(crate) fn getgrgid_name(gid: u32) -> Result<Option<String>> {
+    let mut bufsize: usize = 1024;
     let mut group = std::mem::MaybeUninit::<libc::group>::uninit();
-    let mut buf = [0u8; 2048];
     let mut result = std::ptr::null_mut::<libc::group>();
-    let rc = unsafe {
-        libc::getgrgid_r(
-            gid,
-            group.as_mut_ptr(),
-            buf.as_mut_ptr() as *mut libc::c_char,
-            buf.len(),
-            &mut result,
-        )
-    };
-    if rc != 0 {
-        return Err(Error::last_os_error());
+    loop {
+        let mut buf = vec![0u8; bufsize];
+        let rc = unsafe {
+            libc::getgrgid_r(
+                gid,
+                group.as_mut_ptr(),
+                buf.as_mut_ptr() as *mut libc::c_char,
+                buf.len(),
+                &mut result,
+            )
+        };
+        if rc == libc::ERANGE {
+            // Buffer too small
+            bufsize *= 2;
+            continue;
+        }
+        if rc != 0 {
+            return Err(Error::last_os_error());
+        }
+        if result.is_null() {
+            return Ok(None);
+        }
+        let name = unsafe { core::ffi::CStr::from_ptr((*result).gr_name) };
+        return Ok(Some(name.to_string_lossy().to_string()));
     }
-    if result.is_null() {
-        return Ok(None);
-    }
-    let name = unsafe { core::ffi::CStr::from_ptr((*result).gr_name) };
-    Ok(Some(name.to_string_lossy().to_string()))
 }
 
 pub(crate) fn major(dev: u64) -> u32 {
