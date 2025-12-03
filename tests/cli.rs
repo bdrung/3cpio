@@ -277,6 +277,27 @@ fn test_create_data_align_zero() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_create_invalid_manifest() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("--create")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let process = cmd.spawn()?;
+    let mut stdin = process.stdin.as_ref().unwrap();
+    stdin.write_all(b"#cpio: brotli\n")?;
+    process
+        .wait_with_output()?
+        .assert_failure(1)
+        .assert_stderr_contains(
+            "Error: Failed to create 'cpio on stdout': \
+            line 1: Unknown compression format: brotli",
+        )
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
 fn test_create_missing_path() -> Result<(), Box<dyn Error>> {
     let temp_dir = TempDir::new()?;
     let path = temp_dir.path.join("nonexistent").join("empty.cpio");
