@@ -3,7 +3,7 @@
 
 use std::env::set_current_dir;
 use std::fs::{create_dir, read_dir, File};
-use std::io::{ErrorKind, Write};
+use std::io::{ErrorKind, Stderr, Write};
 use std::num::NonZeroU32;
 use std::path::Path;
 use std::process::ExitCode;
@@ -282,6 +282,53 @@ fn print_cpio_archive_count<W: Write>(mut archive: File, out: &mut W) -> std::io
     Ok(())
 }
 
+fn operate_on_archive(
+    archive: File,
+    args: &Args,
+    cwd: &Path,
+    logger: &mut Logger<Stderr>,
+) -> (&'static str, std::io::Result<()>) {
+    let mut stdout = std::io::stdout();
+    if args.count {
+        (
+            "count number of cpio archives",
+            print_cpio_archive_count(archive, &mut stdout),
+        )
+    } else if args.examine {
+        (
+            "examine content",
+            examine_cpio_content(archive, &mut stdout, args.raw),
+        )
+    } else if args.extract {
+        (
+            "extract content",
+            extract_cpio_archive(
+                archive,
+                if args.to_stdout {
+                    ExtractTarget::WritableStream(&mut stdout)
+                } else {
+                    ExtractTarget::Directory(cwd.to_path_buf())
+                },
+                &args.extract_options(),
+                logger,
+            ),
+        )
+    } else if args.list {
+        (
+            "list content",
+            list_cpio_content(
+                archive,
+                &mut stdout,
+                args.parts.as_ref(),
+                &args.patterns,
+                args.log_level.clone(),
+            ),
+        )
+    } else {
+        unreachable!("no operation specified");
+    }
+}
+
 fn main() -> ExitCode {
     let executable = std::env::args().next().unwrap();
     let args = match parse_args() {
@@ -355,53 +402,14 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let mut stdout = std::io::stdout();
-    let (operation, result) = if args.count {
-        (
-            "count number of cpio archives",
-            print_cpio_archive_count(archive, &mut stdout),
-        )
-    } else if args.examine {
-        (
-            "examine content",
-            examine_cpio_content(archive, &mut stdout, args.raw),
-        )
-    } else if args.extract {
-        (
-            "extract content",
-            extract_cpio_archive(
-                archive,
-                if args.to_stdout {
-                    ExtractTarget::WritableStream(&mut stdout)
-                } else {
-                    ExtractTarget::Directory(cwd)
-                },
-                &args.extract_options(),
-                &mut logger,
-            ),
-        )
-    } else if args.list {
-        (
-            "list content",
-            list_cpio_content(
-                archive,
-                &mut stdout,
-                args.parts.as_ref(),
-                &args.patterns,
-                args.log_level,
-            ),
-        )
-    } else {
-        unreachable!("no operation specified");
-    };
-
+    let (operation, result) = operate_on_archive(archive, &args, &cwd, &mut logger);
     if let Err(e) = result {
         match e.kind() {
             ErrorKind::BrokenPipe => {}
             _ => {
                 eprintln!(
                     "{executable}: Error: Failed to {operation} of '{}': {e}",
-                    args.archive.unwrap(),
+                    args.archive.as_deref().unwrap(),
                 );
                 return ExitCode::FAILURE;
             }
