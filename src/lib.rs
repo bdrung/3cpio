@@ -431,7 +431,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
-            ".\nusr\nusr/bin\nusr/bin/sh\n"
+            ".\nusr\nusr/bin\nusr/bin/ash\nusr/bin/sh\n"
         );
     }
 

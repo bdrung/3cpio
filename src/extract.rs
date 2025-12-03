@@ -655,7 +655,9 @@ mod tests {
             major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \"usr\" }\n\
             Header { ino: 2, mode: 16893, uid: 0, gid: 0, nlink: 2, mtime: 1713104326, filesize: 0, \
             major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \"usr/bin\" }\n\
-            Header { ino: 3, mode: 33204, uid: 0, gid: 0, nlink: 1, mtime: 1713104326, filesize: 56, \
+            Header { ino: 3, mode: 41471, uid: 0, gid: 0, nlink: 1, mtime: 1713104326, filesize: 2, \
+            major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \"usr/bin/ash\" }\n\
+            Header { ino: 4, mode: 33204, uid: 0, gid: 0, nlink: 1, mtime: 1713104326, filesize: 56, \
             major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \"usr/bin/sh\" }\n"
         );
     }

@@ -28,6 +28,7 @@ generate_cpio "${input}/single" > single.cpio
 
 mkdir -p "$input/shell/usr/bin/"
 echo "This is a fake busybox binary to simulate a POSIX shell" > "$input/shell/usr/bin/sh"
+ln -s sh "$input/shell/usr/bin/ash"
 generate_cpio "${input}/shell" > "$input/shell.cpio"
 touch --date="@${SOURCE_DATE_EPOCH}" "$input/shell.cpio"
 

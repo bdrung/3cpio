@@ -136,7 +136,7 @@ mod tests {
             String::from_utf8(output).unwrap(),
             "Start     End       Size      Compr.   Extracted\n\
             0 B       512 B     512 B     cpio     8 B\n\
-            512 B     1.54 kB   1.02 kB   cpio     56 B\n\
+            512 B     1.54 kB   1.02 kB   cpio     58 B\n\
             1.54 kB   4.83 kB   3.29 kB   zstd     103 MB\n"
         );
     }

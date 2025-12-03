@@ -335,7 +335,7 @@ fn test_examine_compressed_cpio_raw() -> Result<(), Box<dyn Error>> {
             .assert_stderr("")
             .assert_success()
             .assert_stdout(format!(
-                "0\t512\t512\tcpio\t8\n512\t{size}\t{}\t{compression}\t56\n",
+                "0\t512\t512\tcpio\t8\n512\t{size}\t{}\t{compression}\t58\n",
                 size - 512
             ));
     }
@@ -419,10 +419,11 @@ fn test_extract_with_subdir() -> Result<(), Box<dyn Error>> {
 
     println!("tempdir = {:?}", tempdir.path);
     cmd.output()?
-        .assert_stderr(".\npath\npath/file\n.\nusr\nusr/bin\nusr/bin/sh\n")
+        .assert_stderr(".\npath\npath/file\n.\nusr\nusr/bin\nusr/bin/ash\nusr/bin/sh\n")
         .assert_success()
         .assert_stdout("");
     assert!(tempdir.path.join("subdir1/path/file").exists());
+    assert!(tempdir.path.join("subdir2/usr/bin/ash").exists());
     assert!(tempdir.path.join("subdir2/usr/bin/sh").exists());
     Ok(())
 }
@@ -475,7 +476,7 @@ fn test_list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
         cmd.output()?
             .assert_stderr("")
             .assert_success()
-            .assert_stdout(".\npath\npath/file\n.\nusr\nusr/bin\nusr/bin/sh\n");
+            .assert_stdout(".\npath\npath/file\n.\nusr\nusr/bin\nusr/bin/ash\nusr/bin/sh\n");
     }
     Ok(())
 }
@@ -500,6 +501,7 @@ fn test_list_content_compressed_cpio_verbose() -> Result<(), Box<dyn Error>> {
                  drwxrwxr-x   2 root     root            0 Apr 14  2024 .\n\
                  drwxrwxr-x   2 root     root            0 Apr 14  2024 usr\n\
                  drwxrwxr-x   2 root     root            0 Apr 14  2024 usr/bin\n\
+                 lrwxrwxrwx   1 root     root            2 Apr 14  2024 usr/bin/ash -> sh\n\
                  -rw-rw-r--   1 root     root           56 Apr 14  2024 usr/bin/sh\n",
             );
     }
