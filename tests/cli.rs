@@ -277,6 +277,23 @@ fn test_create_data_align_zero() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_create_missing_path() -> Result<(), Box<dyn Error>> {
+    let temp_dir = TempDir::new()?;
+    let path = temp_dir.path.join("nonexistent").join("empty.cpio");
+    let path = path.into_os_string().into_string().unwrap();
+
+    let mut cmd = get_command();
+    cmd.args(["--create", &path]);
+    cmd.output()?
+        .assert_failure(1)
+        .assert_stderr_contains(&format!(
+            "Error: Failed to create '{path}': No such file or directory"
+        ))
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
 fn test_create_uncompressed_plus_zstd_on_stdout() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--create");
