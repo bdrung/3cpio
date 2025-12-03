@@ -507,6 +507,21 @@ fn test_list_content_compressed_cpio_verbose() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_list_content_invalid_archive() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("--list").arg("tests/generate");
+
+    cmd.output()?
+        .assert_failure(1)
+        .assert_stderr_contains(
+            "Error: Failed to list content of 'tests/generate': \
+             Failed to determine CPIO or compression magic number",
+        )
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
 fn test_list_content_parts_compressed_cpio() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-t").arg("--parts=1").arg("tests/xz.cpio");
