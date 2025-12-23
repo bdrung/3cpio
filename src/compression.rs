@@ -3,6 +3,8 @@
 
 use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 use std::process::{Child, ChildStdout, Command, Stdio};
 
 #[derive(Debug, PartialEq)]
@@ -220,6 +222,12 @@ impl Compression {
             #[cfg(test)]
             Self::NonExistent | Self::Failing => {}
         };
+        if matches!(self, Self::Gzip { level: _ })
+            && source_date_epoch.is_none()
+            && has_command("pigz")
+        {
+            command = Command::new("pigz");
+        }
 
         match self {
             Self::Bzip2 { level: Some(level) }
@@ -281,6 +289,9 @@ impl Compression {
 
     fn decompress_command(&self) -> Command {
         let mut command = Command::new(self.command());
+        if matches!(self, Self::Gzip { level: _ }) && has_command("pigz") {
+            command = Command::new("pigz");
+        }
         match self {
             Self::Bzip2 { level: _ }
             | Self::Gzip { level: _ }
@@ -303,6 +314,29 @@ impl Compression {
     pub(crate) fn is_uncompressed(&self) -> bool {
         matches!(self, Self::Uncompressed)
     }
+}
+
+fn get_paths() -> Vec<PathBuf> {
+    match std::env::var_os("PATH") {
+        Some(path) => std::env::split_paths(&path).collect(),
+        None => vec!["/bin".into(), "/usr/bin".into()],
+    }
+}
+
+fn has_command(command: &str) -> bool {
+    for dir in get_paths() {
+        let cmd_path = dir.join(command);
+        if let Ok(metadata) = std::fs::metadata(cmd_path) {
+            if metadata.is_file() && is_executable(metadata) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn is_executable(metadata: std::fs::Metadata) -> bool {
+    metadata.permissions().mode() & 0o111 != 0
 }
 
 pub(crate) fn read_magic_header<R: Read + Seek>(file: &mut R) -> Result<Option<Compression>> {
@@ -348,5 +382,10 @@ mod tests {
     fn test_compression_from_command_line_xz_6() {
         let compression = Compression::from_command_line("  xz \t -6 ").unwrap();
         assert_eq!(compression, Compression::Xz { level: Some(6) });
+    }
+
+    #[test]
+    fn test_has_command_not_found() {
+        assert!(!has_command("non-existing-program"));
     }
 }

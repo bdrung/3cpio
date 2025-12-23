@@ -135,6 +135,40 @@ fn test_create_compressed_cpio_file() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_create_compressed_cpio_file_no_source_date_epoch() -> Result<(), Box<dyn Error>> {
+    let temp_dir = TempDir::new()?;
+    let path = temp_dir.path.join("test.cpio");
+    let path = path.into_os_string().into_string().unwrap();
+
+    let mut cmd = get_command();
+    cmd.args(["--create", &path])
+        .env_remove("SOURCE_DATE_EPOCH")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let process = cmd.spawn()?;
+    let mut stdin = process.stdin.as_ref().unwrap();
+    stdin.write_all(b"#cpio: gzip -1\ntests/generate\tgenerate\n")?;
+    process
+        .wait_with_output()?
+        .assert_stdout("")
+        .assert_stderr("");
+
+    let mut cmd = get_command();
+    cmd.arg("-x")
+        .arg("-C")
+        .arg(temp_dir.path.join("extracted"))
+        .arg("-v")
+        .arg(&path);
+    cmd.output()?
+        .assert_stderr("generate\n")
+        .assert_success()
+        .assert_stdout("");
+    assert!(temp_dir.path.join("extracted/generate").exists());
+    Ok(())
+}
+
+#[test]
 fn test_create_compressed_cpio_on_stdout() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--create")

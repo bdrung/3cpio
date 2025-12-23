@@ -25,7 +25,7 @@ jobs:
         run: >
           sudo apt-get update
           && sudo apt-get install --no-install-recommends --yes
-          bzip2 lz4 lzop xz-utils zstd
+          bzip2 lz4 lzop pigz xz-utils zstd
       - uses: actions/checkout@v4
       - run: >
           rustup update ${{ matrix.toolchain }}
@@ -71,7 +71,7 @@ jobs:
         run: >
           sudo apt-get update
           && sudo apt-get install --no-install-recommends --yes
-          bzip2 lz4 lzop xz-utils zstd
+          bzip2 lz4 lzop pigz xz-utils zstd
       - uses: actions/checkout@v4
       - run: >
           rustup update stable
