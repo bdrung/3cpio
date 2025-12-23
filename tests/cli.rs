@@ -520,6 +520,18 @@ fn test_list_content_compressed_cpio() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_list_content_compressed_cpio_path_unset() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("--list").arg("tests/gzip.cpio").env_remove("PATH");
+
+    cmd.output()?
+        .assert_stderr("")
+        .assert_success()
+        .assert_stdout(".\npath\npath/file\n.\nusr\nusr/bin\nusr/bin/ash\nusr/bin/sh\n");
+    Ok(())
+}
+
+#[test]
 fn test_list_content_compressed_cpio_verbose() -> Result<(), Box<dyn Error>> {
     for compression in ["bzip2", "gzip", "lz4", "lzma", "lzop", "xz", "zstd"] {
         if program_not_available(compression) {
