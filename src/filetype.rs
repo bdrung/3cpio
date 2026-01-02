@@ -1,4 +1,4 @@
-// Copyright (C) 2025, Benjamin Drung <bdrung@posteo.de>
+// Copyright (C) 2025-2026, Benjamin Drung <bdrung@posteo.de>
 // SPDX-License-Identifier: ISC
 
 pub(crate) const MODE_PERMISSION_MASK: u32 = 0o007_777;

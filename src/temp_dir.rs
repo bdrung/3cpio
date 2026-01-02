@@ -1,4 +1,4 @@
-// Copyright (C) 2025, Benjamin Drung <bdrung@posteo.de>
+// Copyright (C) 2025-2026, Benjamin Drung <bdrung@posteo.de>
 // SPDX-License-Identifier: ISC
 
 use std::env::{self, set_current_dir};

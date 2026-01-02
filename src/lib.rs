@@ -1,4 +1,4 @@
-// Copyright (C) 2024, Benjamin Drung <bdrung@posteo.de>
+// Copyright (C) 2024-2026, Benjamin Drung <bdrung@posteo.de>
 // SPDX-License-Identifier: ISC
 
 use std::collections::HashMap;

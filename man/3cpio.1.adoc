@@ -407,5 +407,5 @@ bsdcpio(1), cpio(1), lsinitramfs(8), lsinitrd(1)
 
 == Copying
 
-Copyright (C) 2024-2025 Benjamin Drung.
+Copyright (C) 2024-2026 Benjamin Drung.
 Free use of this software is granted under the terms of the ISC License.
