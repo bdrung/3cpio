@@ -27,6 +27,9 @@ pub(crate) fn getpwuid_name(uid: u32) -> Result<Option<String>> {
             bufsize *= 2;
             continue;
         }
+        if rc == libc::ENOENT {
+            return Ok(None);
+        }
         if rc != 0 {
             return Err(Error::last_os_error());
         }
@@ -63,6 +66,9 @@ pub(crate) fn getgrgid_name(gid: u32) -> Result<Option<String>> {
             // Buffer too small
             bufsize *= 2;
             continue;
+        }
+        if rc == libc::ENOENT {
+            return Ok(None);
         }
         if rc != 0 {
             return Err(Error::last_os_error());
