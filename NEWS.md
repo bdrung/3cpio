@@ -1,6 +1,22 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.13.0 (2026-01-03)
+-------------------
+
+### What's new
+
+* use `pigz` for gzip compression when available
+  ([issue #32](https://github.com/bdrung/3cpio/issues/32))
+* build: use LTO and only one codegen unit
+  ([issue #35](https://github.com/bdrung/3cpio/issues/35))
+
+### Fixed
+
+* improve error message for failed `getpwuid_name`/`getgrgid_name`
+* retry `getpwuid_r`/`getgrgid_r` on `ERANGE` with larger buffer
+* consider `ENOENT` error as user/group not found
+
 0.12.0 (2025-11-11)
 -------------------
 
