@@ -16,6 +16,32 @@ initramfs cpio.
 **Note**: The Rust crate is named threecpio, because package names are not
 allowed to start with numbers.
 
+Installation
+------------
+
+<a href="https://repology.org/project/3cpio/versions">
+  <img
+    src="https://repology.org/badge/vertical-allrepos/3cpio.svg"
+    alt="Packaging status"
+    align="right"
+    style="margin-left: 1em;"
+  />
+</a>
+
+### Distribution Package
+
+The easiest way to install 3cpio is to install a package offered by your
+operating system. See the *Packaging status* image next to this text for
+a list of distributions with a 3cpio package:
+
+### Manual Installation
+
+Install cargo on your operating system and then run:
+
+```
+cargo install threecpio
+```
+
 Usage examples
 --------------
 
