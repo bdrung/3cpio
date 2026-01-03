@@ -28,3 +28,7 @@ path = "src/main.rs"
 glob = "0.3"
 libc = "0.2.173"
 lexopt = "0.3"
+
+[profile.release]
+lto = true
+codegen-units = 1
