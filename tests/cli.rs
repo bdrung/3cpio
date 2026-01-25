@@ -3,9 +3,11 @@
 
 use std::env;
 use std::error::Error;
-use std::fs::{symlink_metadata, File};
+use std::fs::{symlink_metadata, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
 use std::os::unix::fs::MetadataExt;
+use std::os::unix::io::{FromRawFd, IntoRawFd};
+use std::os::unix::net::UnixStream;
 use std::process::{Command, Output, Stdio};
 use std::time::SystemTime;
 
@@ -688,6 +690,49 @@ fn test_print_version() -> Result<(), Box<dyn Error>> {
     let mut matches = String::from(version);
     matches.retain(|c| c.is_ascii_digit() || c == '.');
     assert_eq!(matches, version);
+    Ok(())
+}
+
+#[test]
+fn test_stdout_write_pipe_fail() -> Result<(), Box<dyn Error>> {
+    for argument in ["--help", "--version"] {
+        let (reader, writer) = UnixStream::pair()?;
+        // Close the reader before spawning (similar to "3cpio --help | true")
+        drop(reader);
+        let stdout = unsafe { Stdio::from_raw_fd(writer.into_raw_fd()) };
+
+        let mut cmd = get_command();
+        cmd.arg(argument)
+            .env("LANG", "C.UTF-8")
+            .stdout(stdout)
+            .stderr(Stdio::piped());
+        let process = cmd.spawn()?;
+
+        process
+            .wait_with_output()?
+            .assert_stderr("")
+            .assert_failure(141);
+    }
+    Ok(())
+}
+
+#[test]
+fn test_stdout_write_pipe_full() -> Result<(), Box<dyn Error>> {
+    for argument in ["--help", "--version"] {
+        let dev_full = OpenOptions::new().write(true).open("/dev/full")?;
+
+        let mut cmd = get_command();
+        cmd.arg(argument)
+            .env("LANG", "C.UTF-8")
+            .stdout(Stdio::from(dev_full))
+            .stderr(Stdio::piped());
+        let process = cmd.spawn()?;
+
+        process
+            .wait_with_output()?
+            .assert_stderr("3cpio: stdout write error: No space left on device (os error 28)\n")
+            .assert_failure(1);
+    }
     Ok(())
 }
 

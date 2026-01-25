@@ -50,9 +50,30 @@ impl Args {
     }
 }
 
+/// A println function that behaves like tools from the GNU project.
+fn gnu_println(args: std::fmt::Arguments) {
+    let mut stdout = std::io::stdout().lock();
+
+    if let Err(e) = writeln!(stdout, "{}", args) {
+        if e.kind() == std::io::ErrorKind::BrokenPipe {
+            std::process::exit(141); // 128 + SIGPIPE
+        } else {
+            let name = std::option_env!("CARGO_BIN_NAME").unwrap();
+            let _ = writeln!(std::io::stderr(), "{}: stdout write error: {}", name, e);
+            std::process::exit(1);
+        }
+    }
+}
+
+macro_rules! gnu_println {
+    ($($arg:tt)*) => {
+        gnu_println(format_args!($($arg)*))
+    };
+}
+
 fn print_help() {
     let executable = std::env::args().next().unwrap();
-    println!(
+    gnu_println!(
         "Usage:
     {executable} --count ARCHIVE
     {executable} {{-c|--create}} [-v|--debug] [-C DIR] [--data-align BYTES] [ARCHIVE] < manifest
@@ -88,7 +109,7 @@ Optional arguments:
 fn print_version() {
     let name = std::option_env!("CARGO_BIN_NAME").unwrap();
     let version = std::option_env!("CARGO_PKG_VERSION").unwrap();
-    println!("{name} {version}");
+    gnu_println!("{name} {version}");
 }
 
 fn parse_args() -> Result<Args, lexopt::Error> {
