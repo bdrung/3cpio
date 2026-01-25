@@ -1,6 +1,14 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.13.1 (2026-01-25)
+-------------------
+
+### Fixed
+
+* do not panic when writing `--help`/`--version` to stdout fails
+  ([issue #34](https://github.com/bdrung/3cpio/issues/34))
+
 0.13.0 (2026-01-03)
 -------------------
 

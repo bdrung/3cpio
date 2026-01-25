@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name = "threecpio"
-version = "0.13.0"
+version = "0.13.1"
 authors = ["Benjamin Drung <bdrung@posteo.de>"]
 description = "manage initrd cpio archives"
 homepage = "https://github.com/bdrung/3cpio"
