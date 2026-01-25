@@ -351,6 +351,19 @@ fn test_create_missing_path() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_create_multiple() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.args(["--create", "--file", "/tmp/first", "-F", "/tmp/second"]);
+    cmd.output()?
+        .assert_failure(2)
+        .assert_stderr_contains(
+            "Error: specifying multiple --file=ARCHIVE is only supported for --extract",
+        )
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
 fn test_create_uncompressed_plus_zstd_on_stdout() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("--create");
@@ -461,6 +474,30 @@ fn test_examine_single_cpio_raw() -> Result<(), Box<dyn Error>> {
         .assert_stderr("")
         .assert_success()
         .assert_stdout("0\t512\t512\tcpio\t8\n");
+    Ok(())
+}
+
+#[test]
+fn test_extract_multiple() -> Result<(), Box<dyn Error>> {
+    let tempdir = TempDir::new()?;
+    let mut cmd = get_command();
+    cmd.arg("-x")
+        .arg("-C")
+        .arg(&tempdir.path)
+        .arg("-v")
+        .arg("-F")
+        .arg("tests/single.cpio")
+        .arg("--file")
+        .arg("tests/shell.cpio");
+
+    println!("tempdir = {:?}", tempdir.path);
+    cmd.output()?
+        .assert_stderr(".\npath\npath/file\n.\nusr\nusr/bin\nusr/bin/ash\nusr/bin/sh\n")
+        .assert_success()
+        .assert_stdout("");
+    assert!(tempdir.path.join("path/file").exists());
+    assert!(tempdir.path.join("usr/bin/ash").exists());
+    assert!(tempdir.path.join("usr/bin/sh").exists());
     Ok(())
 }
 

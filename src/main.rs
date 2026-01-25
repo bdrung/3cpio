@@ -28,7 +28,7 @@ struct Args {
     force: bool,
     list: bool,
     log_level: Level,
-    archive: Option<String>,
+    archives: Vec<String>,
     make_directories: bool,
     parts: Option<Ranges>,
     patterns: Vec<Pattern>,
@@ -79,7 +79,9 @@ fn print_help() {
     {executable} {{-c|--create}} [-v|--debug] [-C DIR] [--data-align BYTES] [ARCHIVE] < manifest
     {executable} {{-e|--examine}} [--raw] ARCHIVE
     {executable} {{-t|--list}} [-v|--debug] [-P LIST] ARCHIVE [pattern...]
-    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [--make-directories] [-P LIST] [-p] [-s NAME] [--to-stdout] [--force] ARCHIVE [pattern...]
+    {executable} {{-x|--extract}} [-v|--debug] [-C DIR] [--make-directories] [-P LIST] \
+                 [-p] [-s NAME] [--to-stdout] [--force] [-F|--file] \
+                 ARCHIVE [-F|--file ARCHIVE...] [pattern...]
 
 Optional arguments:
   --count        Print the number of concatenated cpio archives.
@@ -124,7 +126,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
     let mut list = 0;
     let mut log_level = Level::Warning;
     let mut directory = ".".into();
-    let mut archive = None;
+    let mut archives = Vec::new();
     let mut make_directories = false;
     let mut patterns = Vec::new();
     let mut raw = false;
@@ -200,8 +202,11 @@ fn parse_args() -> Result<Args, lexopt::Error> {
             Short('x') | Long("extract") => {
                 extract = 1;
             }
-            Value(val) if archive.is_none() => {
-                archive = Some(val.string()?);
+            Value(val) if archives.is_empty() => {
+                archives.push(val.string()?);
+            }
+            Short('F') | Long("file") => {
+                archives.push(parser.value()?.string()?);
             }
             Value(val) => arguments.push(val.string()?),
             _ => return Err(arg.unexpected()),
@@ -231,8 +236,11 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         }
     }
 
-    if create != 1 && archive.is_none() {
+    if create != 1 && archives.is_empty() {
         return Err("missing argument ARCHIVE".into());
+    }
+    if extract != 1 && archives.len() > 1 {
+        return Err("specifying multiple --file=ARCHIVE is only supported for --extract".into());
     }
 
     Ok(Args {
@@ -245,7 +253,7 @@ fn parse_args() -> Result<Args, lexopt::Error> {
         force,
         list: list == 1,
         log_level,
-        archive,
+        archives,
         make_directories,
         parts,
         patterns,
@@ -363,7 +371,7 @@ fn main() -> ExitCode {
 
     if args.create {
         let mut archive = None;
-        if let Some(path) = args.archive.as_ref() {
+        if let Some(path) = args.archives.first() {
             archive = match File::create(path) {
                 Ok(f) => Some(f),
                 Err(e) => {
@@ -389,7 +397,7 @@ fn main() -> ExitCode {
                 _ => {
                     eprintln!(
                         "{executable}: Error: Failed to create '{}': {error}",
-                        args.archive.unwrap_or("cpio on stdout".into()),
+                        args.archives.first().unwrap_or(&"cpio on stdout".into()),
                     );
                     return ExitCode::FAILURE;
                 }
@@ -398,16 +406,17 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     };
 
-    let archive = match File::open(args.archive.as_ref().unwrap()) {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!(
-                "{executable}: Error: Failed to open '{}': {e}",
-                args.archive.unwrap(),
-            );
-            return ExitCode::FAILURE;
-        }
-    };
+    let mut opened_archives = Vec::new();
+    for path in &args.archives {
+        let archive = match File::open(path) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("{executable}: Error: Failed to open '{path}': {e}");
+                return ExitCode::FAILURE;
+            }
+        };
+        opened_archives.push((path.clone(), archive));
+    }
 
     if args.extract && !args.to_stdout {
         if let Err(e) = create_and_set_current_dir(&args.directory, args.force) {
@@ -423,16 +432,15 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let (operation, result) = operate_on_archive(archive, &args, &cwd, &mut logger);
-    if let Err(e) = result {
-        match e.kind() {
-            ErrorKind::BrokenPipe => {}
-            _ => {
-                eprintln!(
-                    "{executable}: Error: Failed to {operation} of '{}': {e}",
-                    args.archive.as_deref().unwrap(),
-                );
-                return ExitCode::FAILURE;
+    for (path, archive) in opened_archives {
+        let (operation, result) = operate_on_archive(archive, &args, &cwd, &mut logger);
+        if let Err(e) = result {
+            match e.kind() {
+                ErrorKind::BrokenPipe => break,
+                _ => {
+                    eprintln!("{executable}: Error: Failed to {operation} of '{path}': {e}");
+                    return ExitCode::FAILURE;
+                }
             }
         }
     }
