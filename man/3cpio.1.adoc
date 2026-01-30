@@ -22,7 +22,7 @@ Benjamin Drung
 *3cpio* {*-t*|*--list*} [*-v*|*--debug*] [*-P* _LIST_] _ARCHIVE_ [_pattern_...]
 
 *3cpio* {*-x*|*--extract*} [*-v*|*--debug*] [*-C* _DIR_] [*-P* _LIST_] [*-p*] [*-s* _NAME_]
-[*--to-stdout*] [*--force*] _ARCHIVE_ [_pattern_...]
+[*--to-stdout*] [*--force*] [*-F*] _ARCHIVE_ [*-F*|*--file* _ARCHIVE_...] [_pattern_...]
 
 *3cpio* {*-V*|*--version*}
 
@@ -74,8 +74,10 @@ Following compression formats are supported: bzip2, gzip, lz4, lzma, lzop, xz, z
   matching at least one of those __pattern__s.
   These __pattern__s are shell wildcard patterns (see *glob*(7)).
 
-*-x*, *--extract* _ARCHIVE_ [_pattern_...]::
+*-x*, *--extract* [*-F*|*--file*] _ARCHIVE_ [*-F*|*--file* _ARCHIVE_] [_pattern_...]::
   Extract cpio archives.
+  Multiple archives can be specified with *-F*.
+  The option *-F* can be omitted for the first archive.
   If one or more __pattern__s are supplied, extract only files
   matching at least one of those __pattern__s.
   These __pattern__s are shell wildcard patterns (see *glob*(7)).
