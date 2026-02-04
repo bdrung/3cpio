@@ -1,6 +1,14 @@
 This file summarizes the major and interesting changes for each release. For a
 detailed list of changes, please see the git history.
 
+0.14.0 (2026-02-04)
+-------------------
+
+### What's new
+
+* Support extracting multiple archives in one call by specifying them via
+  `-F` or `--file`. ([issue #11](https://github.com/bdrung/3cpio/issues/11))
+
 0.13.1 (2026-01-25)
 -------------------
 
