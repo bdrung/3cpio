@@ -193,7 +193,7 @@ impl Header {
         let mut target_bytes = vec![0u8; filesize + align];
         archive.read_exact(&mut target_bytes)?;
         target_bytes.truncate(filesize);
-        // TODO: propper name reading handling
+        // TODO: proper name reading handling
         let target = std::str::from_utf8(&target_bytes).unwrap();
         Ok(target.into())
     }
@@ -345,7 +345,7 @@ fn read_filename<R: Read>(archive: &mut R, namesize: u64) -> Result<String> {
         ));
     }
     filename_bytes.truncate(filename_length);
-    // TODO: propper name reading handling
+    // TODO: proper name reading handling
     let filename = std::str::from_utf8(&filename_bytes).unwrap();
     Ok(filename.to_string())
 }
