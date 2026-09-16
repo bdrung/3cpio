@@ -291,7 +291,7 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
                     let absdir = absolute_parent_directory(&header.filename, base_dir)?;
                     // canonicalize() is an expensive call. So cache the previously resolved
                     // parent directory. Skip the path traversal check in case the absolute
-                    // parent directory has no symlinks and matches the previouly checked directory.
+                    // parent directory has no symlinks and matches the previously checked directory.
                     if absdir != previous_checked_dir {
                         if options.make_directories {
                             create_dir_all(&absdir)?;
@@ -458,7 +458,7 @@ fn write_file_content<R: Read + SeekForward, W: Write>(
     let written = std::io::copy(&mut reader, output_file)?;
     if written != header.filesize.into() {
         return Err(Error::other(format!(
-            "Wrong amound of bytes written to '{}': {} != {}.",
+            "Wrong amount of bytes written to '{}': {} != {}.",
             header.filename, written, header.filesize
         )));
     }
