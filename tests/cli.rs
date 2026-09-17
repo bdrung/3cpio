@@ -13,24 +13,12 @@ use std::time::SystemTime;
 
 use threecpio::temp_dir::TempDir;
 
-// Derive target directory (e.g. `target/debug`) from current executable
-fn get_target_dir() -> std::path::PathBuf {
-    let mut path = env::current_exe().expect("env::current_exe not set");
-    path.pop();
-    if path.ends_with("deps") {
-        path.pop();
-    }
-    path
-}
-
 fn get_command() -> Command {
     if let Ok(path) = std::env::var("THREECPIO_BIN") {
         return Command::new(path);
     }
 
-    let mut program = get_target_dir();
-    program.push("3cpio");
-    Command::new(program)
+    Command::new(env!("CARGO_BIN_EXE_3cpio"))
 }
 
 fn program_not_available(program: &str) -> bool {
