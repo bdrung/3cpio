@@ -35,7 +35,7 @@ jobs:
       - run: cargo build --verbose
       - run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.toolchain }}
           path: ./lcov.info
@@ -58,7 +58,7 @@ jobs:
       - run: cargo build --verbose
       - run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-minimal
           path: ./lcov.info
@@ -83,7 +83,7 @@ jobs:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER='sudo -E'
           cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-root
           path: ./lcov.info
