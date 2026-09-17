@@ -114,7 +114,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v7
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
