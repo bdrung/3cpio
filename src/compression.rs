@@ -181,7 +181,7 @@ impl Compression {
         size: impl FnOnce() -> u64,
     ) -> Result<Child> {
         let mut command = self.compress_command(source_date_epoch, size);
-        // TODO: Propper error message if spawn fails
+        // TODO: Proper error message if spawn fails
         command.stdin(Stdio::piped());
         if let Some(file) = file {
             command.stdout(file);
@@ -271,7 +271,7 @@ impl Compression {
 
     pub(crate) fn decompress(&self, file: File) -> Result<ChildStdout> {
         let mut command = self.decompress_command();
-        // TODO: Propper error message if spawn fails
+        // TODO: Proper error message if spawn fails
         let cmd = command
             .stdin(file)
             .stdout(Stdio::piped())

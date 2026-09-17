@@ -102,7 +102,7 @@ pub(crate) fn set_modified(path: &str, mtime: i64) -> Result<()> {
     let p = CString::new(path)?;
     let mut modified: libc::timespec = unsafe { std::mem::zeroed() };
     modified.tv_sec = mtime;
-    // times contains the access time followed by modfied time
+    // times contains the access time followed by modified time
     let times = [modified, modified];
     let rc = unsafe {
         libc::utimensat(
