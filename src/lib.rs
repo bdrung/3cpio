@@ -143,15 +143,9 @@ fn read_cpio_and_print_long_format<R: Read + SeekForward, W: Write>(
     let mut last_mtime = 0;
     let mut time_string: String = "".into();
     loop {
-        let header = match Header::read(archive) {
-            Ok(header) => {
-                if header.filename == "TRAILER!!!" {
-                    break;
-                } else {
-                    header
-                }
-            }
-            Err(e) => return Err(e),
+        let header = Header::read(archive)?;
+        if header.filename == "TRAILER!!!" {
+            break;
         };
 
         if !patterns.is_empty() && !filename_matches(&header.filename, patterns) {

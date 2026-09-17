@@ -270,15 +270,9 @@ fn read_cpio_and_extract<R: Read + SeekForward, W: Write, LW: Write>(
         std::env::set_current_dir(base_dir)?;
     }
     loop {
-        let header = match Header::read(archive) {
-            Ok(header) => {
-                if header.filename == TRAILER_FILENAME {
-                    break;
-                } else {
-                    header
-                }
-            }
-            Err(e) => return Err(e),
+        let header = Header::read(archive)?;
+        if header.filename == TRAILER_FILENAME {
+            break;
         };
 
         debug!(logger, "{header:?}")?;
