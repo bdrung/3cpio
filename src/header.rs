@@ -293,7 +293,7 @@ fn check_begins_with_cpio_magic_header(header: &[u8]) -> std::io::Result<()> {
             ErrorKind::InvalidData,
             format!(
                 "Invalid CPIO magic number '{}'. Expected {}",
-                &header[0..6].escape_ascii(),
+                header[0..6].escape_ascii(),
                 std::str::from_utf8(&CPIO_MAGIC_NUMBER).unwrap(),
             ),
         ));

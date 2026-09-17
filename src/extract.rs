@@ -804,7 +804,7 @@ mod tests {
         assert_eq!(got.kind(), ErrorKind::InvalidData);
         assert_eq!(got.to_string(), format!(
             "The parent directory of \"tmp/trav.txt\" (resolved to \"/tmp\") is not within the directory {:#?}.",
-            &tempdir.path
+            tempdir.path
         ));
         assert_eq!(logger.get_logs(), ".\ntmp\ntmp/trav.txt\n");
     }
