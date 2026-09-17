@@ -26,7 +26,7 @@ jobs:
           sudo apt-get update
           && sudo apt-get install --no-install-recommends --yes
           bzip2 lz4 lzop pigz xz-utils zstd
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: >
           rustup update ${{ matrix.toolchain }}
           && rustup default ${{ matrix.toolchain }}
@@ -49,7 +49,7 @@ jobs:
           sudo apt-get update
           && sudo apt-get install --no-install-recommends --yes
           bzip2 lz4 xz-utils zstd
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: >
           rustup update stable
           && rustup default stable
@@ -72,7 +72,7 @@ jobs:
           sudo apt-get update
           && sudo apt-get install --no-install-recommends --yes
           bzip2 lz4 lzop pigz xz-utils zstd
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: >
           rustup update stable
           && rustup default stable
@@ -91,14 +91,14 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features
 
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run rustfmt
         run: cargo fmt --all --check
 
@@ -110,7 +110,7 @@ jobs:
       - build_and_test_root
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download artifacts
         uses: actions/download-artifact@v4
       - name: Upload coverage to Codecov
@@ -127,6 +127,6 @@ jobs:
           sudo apt-get update
           && sudo apt-get install --no-install-recommends --yes
           asciidoctor
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build man pages
         run: asciidoctor -b manpage man/3cpio.1.adoc
