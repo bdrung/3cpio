@@ -65,3 +65,5 @@ mkdir "$input/path-traversal"
 ln -s /tmp "$input/path-traversal/tmp"
 echo "TEST Traversal" > "$input/path-traversal/tmpYtrav.txt"
 generate_cpio "$input/path-traversal" | sed "s@tmpY@tmp/@g" > path-traversal.cpio
+
+./generate.py

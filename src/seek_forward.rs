@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: ISC
 
 use std::fs::File;
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::io::{self, Error, ErrorKind, Read, Result, Seek, SeekFrom};
 use std::process::ChildStdout;
-
-const PIPE_SIZE: usize = 65536;
 
 pub(crate) trait SeekForward {
     /// Seek forward to an offset, in bytes, in a stream.
@@ -29,11 +27,12 @@ impl SeekForward for File {
 impl SeekForward for ChildStdout {
     fn seek_forward(&mut self, offset: u64) -> Result<()> {
         let mut seek_reader = self.take(offset);
-        let mut remaining: usize = offset.try_into().unwrap();
-        let mut buffer = [0; PIPE_SIZE];
-        while remaining > 0 {
-            let read = seek_reader.read(&mut buffer)?;
-            remaining -= read;
+        let copied = io::copy(&mut seek_reader, &mut io::sink())?;
+        if copied < offset {
+            return Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                format!("seek failed: reached EOF at {copied}/{offset} bytes"),
+            ));
         }
         Ok(())
     }

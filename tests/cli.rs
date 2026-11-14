@@ -688,6 +688,21 @@ fn test_list_content_single_cpio_with_pattern() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_list_content_compressed_truncated_cpio() -> Result<(), Box<dyn Error>> {
+    let mut cmd = get_command();
+    cmd.arg("-t").arg("tests/truncated-gzip.cpio");
+
+    cmd.output()?
+        .assert_failure(1)
+        .assert_stderr_contains(
+            "Error: Failed to list content of 'tests/truncated-gzip.cpio': \
+            seek failed: reached EOF at 100/4096 bytes",
+        )
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
 fn test_missing_archive_argument() -> Result<(), Box<dyn Error>> {
     let mut cmd = get_command();
     cmd.arg("-t");
