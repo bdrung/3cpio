@@ -5,7 +5,7 @@ use std::env;
 use std::error::Error;
 use std::fs::{symlink_metadata, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::os::unix::net::UnixStream;
 use std::process::{Command, Output, Stdio};
@@ -296,6 +296,39 @@ fn test_create_data_align_zero() -> Result<(), Box<dyn Error>> {
     cmd.output()?
         .assert_failure(2)
         .assert_stderr_contains("Error: --data-align must be a positive number")
+        .assert_stdout("");
+    Ok(())
+}
+
+#[test]
+fn test_create_compressor_fails() -> Result<(), Box<dyn Error>> {
+    // A compressor that dies early (e.g. killed by the OOM killer) must not
+    // leave a truncated archive behind with a successful exit code.
+    let temp_dir = TempDir::new()?;
+    let zstd = temp_dir.path.join("zstd");
+    std::fs::write(&zstd, "#!/bin/sh\nexit 1\n")?;
+    std::fs::set_permissions(&zstd, std::fs::Permissions::from_mode(0o755))?;
+    // More data than fits into the pipe buffer
+    let data = temp_dir.path.join("data");
+    std::fs::write(&data, vec![0; 1 << 20])?;
+    let path = temp_dir.path.join("initrd.img");
+    let path = path.into_os_string().into_string().unwrap();
+
+    let mut cmd = get_command();
+    cmd.args(["--create", &path])
+        .env("PATH", &temp_dir.path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let process = cmd.spawn()?;
+    let mut stdin = process.stdin.as_ref().unwrap();
+    write!(stdin, "#cpio: zstd\n{}\n", data.display())?;
+    process
+        .wait_with_output()?
+        .assert_failure(1)
+        .assert_stderr_contains(&format!(
+            "Error: Failed to create '{path}': zstd failed: exit status: 1"
+        ))
         .assert_stdout("");
     Ok(())
 }

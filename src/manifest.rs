@@ -719,9 +719,13 @@ impl Manifest {
                         .compression
                         .compress(file, source_date_epoch, || archive.size())?;
                 let mut writer = BufWriter::new(compressor.stdin.as_ref().unwrap());
-                size = archive.write(&mut writer, None, source_date_epoch, size, logger)?;
-                writer.flush()?;
+                let result = archive
+                    .write(&mut writer, None, source_date_epoch, size, logger)
+                    .and_then(|size| writer.flush().map(|()| size));
                 drop(writer);
+                // Wait for the compressor even if writing to it failed: if it died
+                // (e.g. killed by the OOM killer), writing fails with a broken pipe,
+                // which would hide that the compressed archive is incomplete.
                 let exit_status = compressor.wait()?;
                 if !exit_status.success() {
                     return Err(Error::other(format!(
@@ -729,6 +733,7 @@ impl Manifest {
                         archive.compression.command()
                     )));
                 }
+                size = result?;
                 // TODO: Check that the compressed cpio is the last
                 break;
             }
@@ -1615,16 +1620,33 @@ mod tests {
         let got = manifest
             .write_archive(Some(file), None, None, &mut logger)
             .unwrap_err();
-        assert!(
-            matches!(got.kind(), ErrorKind::Other if got.to_string() == "false failed: exit status: 1")
-                || matches!(got.kind(), ErrorKind::BrokenPipe)
-        );
+        assert_eq!(got.kind(), ErrorKind::Other);
+        assert_eq!(got.to_string(), "false failed: exit status: 1");
         assert_eq!(
             logger.get_logs(),
             ".\n\
             Header { ino: 0, mode: 16877, uid: 819, gid: 66, nlink: 2, mtime: 1749125499, \
             filesize: 0, major: 0, minor: 0, rmajor: 0, rminor: 0, filename: \".\" }\n",
         );
+    }
+
+    #[test]
+    fn test_manifest_write_compressor_exits_early() {
+        // More data than fits into the pipe buffer, so that writing to the
+        // compressor fails with a broken pipe once it has exited.
+        let temp_dir = TempDir::new().unwrap();
+        let dirs = (0..5000)
+            .map(|i| File::new(Filetype::Directory, format!("dir{i}"), 0o755, 0, 0, 0))
+            .collect();
+        let archive = Archive::with_files_compressed(dirs, Compression::Failing);
+        let manifest = Manifest::new(vec![archive], 0o022);
+        let file = std::fs::File::create(temp_dir.path.join("initrd.img")).unwrap();
+        let mut logger = Logger::new_vec(Level::Warning);
+        let got = manifest
+            .write_archive(Some(file), None, None, &mut logger)
+            .unwrap_err();
+        assert_eq!(got.kind(), ErrorKind::Other);
+        assert_eq!(got.to_string(), "false failed: exit status: 1");
     }
 
     #[test]
